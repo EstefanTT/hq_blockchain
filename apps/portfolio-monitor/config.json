@@ -2,6 +2,8 @@
 	"enabled": false,
 	"syncIntervalMs": 60000,
 	"wallets": [],
-	"chains": ["ethereum"],
+	"chains": [
+		"ethereum"
+	],
 	"snapshotOnSync": true
 }
