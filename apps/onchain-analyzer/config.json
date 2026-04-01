@@ -1,0 +1,7 @@
+{
+	"enabled": false,
+	"chains": ["ethereum"],
+	"watchedWallets": [],
+	"alertOnLargeTransfers": true,
+	"largeTransferThresholdUsd": 100000
+}

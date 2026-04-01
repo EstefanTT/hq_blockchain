@@ -1,0 +1,21 @@
+{
+	"name": "hq-blockchain",
+	"version": "0.1.0",
+	"description": "Modular blockchain operations center — trading, DEX execution, analytics, NFTs",
+	"type": "module",
+	"main": "index.js",
+	"scripts": {
+		"start": "node index.js",
+		"dev": "node --watch index.js"
+	},
+	"author": "Stef",
+	"license": "ISC",
+	"dependencies": {
+		"axios": "^1.10.0",
+		"better-sqlite3": "^11.0.0",
+		"dotenv": "^16.4.7",
+		"express": "^5.1.0",
+		"node-cron": "^4.2.1",
+		"zod": "^4.0.15"
+	}
+}

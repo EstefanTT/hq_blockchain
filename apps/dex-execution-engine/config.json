@@ -1,0 +1,6 @@
+{
+	"enabled": false,
+	"defaultChain": "ethereum",
+	"defaultSlippagePercent": 0.5,
+	"simulateBeforeExecute": true
+}

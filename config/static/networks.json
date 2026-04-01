@@ -1,0 +1,36 @@
+{
+	"ethereum": {
+		"chainId": 1,
+		"rpcEnvVar": "ETH_RPC_URL",
+		"nativeToken": "ETH",
+		"blockExplorer": "https://etherscan.io",
+		"type": "evm"
+	},
+	"arbitrum": {
+		"chainId": 42161,
+		"rpcEnvVar": "ARB_RPC_URL",
+		"nativeToken": "ETH",
+		"blockExplorer": "https://arbiscan.io",
+		"type": "evm"
+	},
+	"polygon": {
+		"chainId": 137,
+		"rpcEnvVar": "POLYGON_RPC_URL",
+		"nativeToken": "MATIC",
+		"blockExplorer": "https://polygonscan.com",
+		"type": "evm"
+	},
+	"bsc": {
+		"chainId": 56,
+		"rpcEnvVar": "BSC_RPC_URL",
+		"nativeToken": "BNB",
+		"blockExplorer": "https://bscscan.com",
+		"type": "evm"
+	},
+	"solana": {
+		"rpcEnvVar": "SOL_RPC_URL",
+		"nativeToken": "SOL",
+		"blockExplorer": "https://solscan.io",
+		"type": "solana"
+	}
+}

@@ -1,0 +1,7 @@
+{
+	"enabled": false,
+	"strategy": "spread-capture",
+	"chain": "ethereum",
+	"pool": "",
+	"tickIntervalMs": 10000
+}

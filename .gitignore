@@ -1,0 +1,10 @@
+node_modules/
+.env
+logs/*.log
+data/*.db
+data/executions/
+data/market/
+data/snapshots/
+data/research/
+!data/**/.gitkeep
+!data/**/README.md
