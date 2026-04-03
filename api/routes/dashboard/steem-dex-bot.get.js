@@ -121,9 +121,15 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 	</div>
 
 	<!-- Alerts -->
-	<div class="card">
+	<div class="card mb-4">
 		<h2 class="text-base font-bold mb-3 text-gray-300">🚨 Divergence Alerts</h2>
 		<div id="alerts-list" class="text-gray-500 text-sm">None</div>
+	</div>
+
+	<!-- Storage Status -->
+	<div class="card">
+		<h2 class="text-base font-bold mb-3 text-gray-300">💾 Storage Status</h2>
+		<div id="storage-info" class="text-gray-500 text-sm">Waiting for data…</div>
 	</div>
 
 	<!-- Footer -->
@@ -172,6 +178,7 @@ function render(d) {
 	renderTrades(d.recentTrades);
 	renderCandles(d.candles);
 	renderAlerts(d.divergenceAlerts);
+	renderStorage(d.storageStats);
 }
 
 function renderEngine(e) {
@@ -293,6 +300,26 @@ function renderTrades(recentTrades) {
 			'<td class="text-right py-0.5 px-2">' + t.price.toFixed(4) + '</td>' +
 			'<td class="text-right py-0.5">' + t.amountBase.toFixed(3) + '</td></tr>';
 	}).join('');
+}
+
+function renderStorage(s) {
+	var el = document.getElementById('storage-info');
+	if (!s) { el.innerHTML = '<span class="text-gray-600">No storage data</span>'; return; }
+
+	var pos = s.currentPosition;
+	var posHtml = pos
+		? '<span class="text-white">' + (pos.baseBalance ?? 0).toFixed(3) + ' STEEM</span> / ' +
+		  '<span class="text-white">' + (pos.quoteBalance ?? 0).toFixed(3) + ' SBD</span>' +
+		  (pos.averageEntryPrice ? ' (avg: ' + pos.averageEntryPrice.toFixed(4) + ')' : '')
+		: '<span class="text-gray-600">None</span>';
+
+	el.innerHTML =
+		'<div class="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1">' +
+			'<div>Last snapshot: ' + tAgo(s.lastSnapshotTime) + '</div>' +
+			'<div>Snapshots today: <span class="text-white">' + (s.snapshotsToday ?? 0) + '</span></div>' +
+			'<div>Trades logged today: <span class="text-white">' + (s.tradesToday ?? 0) + '</span></div>' +
+			'<div>Position: ' + posHtml + '</div>' +
+		'</div>';
 }
 
 // ─── Helpers ────────────────────────────────────────────────

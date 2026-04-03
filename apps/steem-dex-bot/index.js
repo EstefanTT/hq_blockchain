@@ -1,6 +1,6 @@
 // apps/steem-dex-bot/index.js
 // STEEM/SBD DEX trading bot — multi-chain ready skeleton.
-// Wires the price engine (Step 1) and future strategies.
+// Wires the price engine (Step 1), chain connector (Step 2), and SQLite storage (Step 3).
 
 import { readFileSync } from 'fs';
 import path from 'path';
@@ -9,8 +9,11 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = JSON.parse(readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
 
+const SNAPSHOT_INTERVAL_MS = 30_000; // 30s periodic order book snapshots
+
 let priceEngine = null;
 let chainAdapter = null;
+let snapshotTimer = null;
 
 export async function init() {
 	if (!config.enabled) {
@@ -20,6 +23,23 @@ export async function init() {
 
 	console.info('BOT', 'STEEM-DEX', '🚀 Initializing STEEM DEX Bot...');
 	console.info('BOT', 'STEEM-DEX', `Chain: ${config.chainName} | Base: ${config.baseToken.symbol} | Quote: ${config.quoteToken.symbol}`);
+
+	// Initialize SQLite tables (lazy, but we want them ready at boot)
+	const { saveOrderBookSnapshot, addTrades, logAnalysisEvent, getCurrentPosition, countTradesToday } = await import('../../services/storage/steemDexStore.js');
+	const { getLiveOrderBook, updateStorageStats, getSteemDexBotData } = await import('../../services/cache/index.js');
+
+	const { chainName } = config;
+	const base = config.baseToken.symbol;
+	const quote = config.quoteToken.symbol;
+	const cacheKey = `${chainName}:${base}/${quote}`;
+
+	// Seed storage stats from DB (in case of restart)
+	const pos = getCurrentPosition(chainName, base, quote);
+	const tradesToday = countTradesToday(chainName, base, quote);
+	updateStorageStats({
+		tradesToday,
+		currentPosition: pos,
+	});
 
 	// Start the price engine (external feeds)
 	const { PriceEngine } = await import('../../core/market/priceEngine.js');
@@ -38,14 +58,72 @@ export async function init() {
 		baseToken: config.baseToken,
 		quoteToken: config.quoteToken,
 	});
+
+	// Subscribe to new trades → persist to SQLite
+	chainAdapter.subscribe('trade', (trade) => {
+		const inserted = addTrades(chainName, base, quote, [trade]);
+		if (inserted > 0) {
+			updateStorageStats({ tradesToday: (countTradesToday(chainName, base, quote)) });
+			logAnalysisEvent({
+				chainName,
+				eventType: 'TRADE_FILLED',
+				severity: 'INFO',
+				message: `${trade.type.toUpperCase()} ${trade.amountBase} ${base} @ ${trade.price}`,
+				data: trade,
+			});
+		}
+	});
+
 	await chainAdapter.start();
+
+	// Periodic order book snapshots (every 30s)
+	snapshotTimer = setInterval(() => {
+		const book = getLiveOrderBook(cacheKey);
+		if (!book?.bids?.length) return;
+
+		saveOrderBookSnapshot(chainName, base, quote, book);
+		const stats = getSteemDexBotData().storageStats;
+		updateStorageStats({
+			lastSnapshotTime: new Date().toISOString(),
+			snapshotsToday: (stats.snapshotsToday ?? 0) + 1,
+		});
+
+		logAnalysisEvent({
+			chainName,
+			eventType: 'SNAPSHOT_TAKEN',
+			severity: 'INFO',
+			message: `Book snapshot: mid ${book.midPrice?.toFixed(4)}, spread ${book.spreadPercent?.toFixed(2)}%`,
+			data: { midPrice: book.midPrice, spreadPercent: book.spreadPercent, bidsCount: book.bids.length, asksCount: book.asks.length },
+		});
+	}, SNAPSHOT_INTERVAL_MS);
+
+	// Log bot start as analysis event
+	logAnalysisEvent({
+		chainName,
+		eventType: 'BOT_STARTED',
+		severity: 'INFO',
+		message: `STEEM DEX Bot initialized (${config.nodes.length} nodes)`,
+		data: { nodes: config.nodes, base, quote },
+	});
 
 	console.info('BOT', 'STEEM-DEX', '✅ STEEM DEX Bot ready 🟢');
 }
 
 export async function shutdown() {
 	console.info('BOT', 'STEEM-DEX', '🛑 Shutting down...');
+	if (snapshotTimer) clearInterval(snapshotTimer);
 	if (chainAdapter) await chainAdapter.stop();
 	if (priceEngine) await priceEngine.stop();
+
+	try {
+		const { logAnalysisEvent } = await import('../../services/storage/steemDexStore.js');
+		logAnalysisEvent({
+			chainName: config.chainName,
+			eventType: 'BOT_STOPPED',
+			severity: 'INFO',
+			message: 'STEEM DEX Bot shutdown',
+		});
+	} catch { /* storage may already be closed */ }
+
 	console.info('BOT', 'STEEM-DEX', '✅ Shutdown complete');
 }

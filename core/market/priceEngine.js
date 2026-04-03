@@ -13,34 +13,35 @@ import {
 	getSteemDexBotData,
 } from '../../services/cache/index.js';
 import { sendTelegramMessage } from '../../services/messaging/telegram.js';
+import { logAnalysisEvent } from '../../services/storage/steemDexStore.js';
 
 // ─── Intervals (ms) ─────────────────────────────────────────
 
 const INTERVALS = {
-	normal:  { cgPrice: 30 * 60_000, cmcPrice: 6 * 60_000, candles: 30 * 60_000 },
-	violent: { cgPrice: 2 * 60_000,  cmcPrice: 30_000,      candles: 30 * 60_000 },
+	normal: { cgPrice: 30 * 60_000, cmcPrice: 6 * 60_000, candles: 30 * 60_000 },
+	violent: { cgPrice: 2 * 60_000, cmcPrice: 30_000, candles: 30 * 60_000 },
 };
 
 // ─── Thresholds ──────────────────────────────────────────────
 
-const VIOLENT_COOLDOWN_MS    = 15 * 60_000;   // 15 min calm → return to normal
-const VOLATILITY_THRESHOLD   = 0.012;          // 1.2% high-low spread
-const DIVERGENCE_THRESHOLD   = 0.008;          // 0.8% CG vs CMC gap
+const VIOLENT_COOLDOWN_MS = 15 * 60_000;   // 15 min calm → return to normal
+const VOLATILITY_THRESHOLD = 0.012;          // 1.2% high-low spread
+const DIVERGENCE_THRESHOLD = 0.008;          // 0.8% CG vs CMC gap
 const DIVERGENCE_COOLDOWN_MS = 5 * 60_000;     // 5 min between same-coin alerts
 
 // ─── Storage limits ──────────────────────────────────────────
 
-const MAX_RAW_HOURS    = 4;
+const MAX_RAW_HOURS = 4;
 const MAX_HOURLY_HOURS = 24;
-const MAX_DAILY_DAYS   = 30;
+const MAX_DAILY_DAYS = 30;
 
 // ═════════════════════════════════════════════════════════════
 
 export class PriceEngine {
 
 	constructor(config) {
-		this.config     = config;
-		this.coinIds    = [config.baseToken.coingeckoId, config.quoteToken.coingeckoId];
+		this.config = config;
+		this.coinIds = [config.baseToken.coingeckoId, config.quoteToken.coingeckoId];
 		this.cmcSymbols = [config.baseToken.cmcSymbol, config.quoteToken.cmcSymbol];
 
 		// Quick lookups: CG id → symbol, CMC symbol → symbol
@@ -53,13 +54,13 @@ export class PriceEngine {
 			[config.quoteToken.cmcSymbol]: config.quoteToken.symbol,
 		};
 
-		this.mode                  = 'normal';
-		this.running               = false;
-		this.violentSince          = null;
+		this.mode = 'normal';
+		this.running = false;
+		this.violentSince = null;
 		this.lastVolatilityTrigger = null;
-		this.timers                = {};
-		this.lastDivAlertTime      = {};   // { symbol: epoch_ms }
-		this.prevPrices            = {};   // { symbol: usd }
+		this.timers = {};
+		this.lastDivAlertTime = {};   // { symbol: epoch_ms }
+		this.prevPrices = {};   // { symbol: usd }
 	}
 
 	// ═════════════════════════════════════════════════════════
@@ -183,8 +184,8 @@ export class PriceEngine {
 		updatePriceEngineStatus({ [`next_${key}`]: new Date(Date.now() + ms).toISOString() });
 	}
 
-	_scheduleCandles()   { this._schedule('candles',  () => this._fetchCandles()); }
-	_scheduleCgPrices()  { this._schedule('cgPrice',  () => this._fetchCgPrices()); }
+	_scheduleCandles() { this._schedule('candles', () => this._fetchCandles()); }
+	_scheduleCgPrices() { this._schedule('cgPrice', () => this._fetchCgPrices()); }
 	_scheduleCmcPrices() { this._schedule('cmcPrice', () => this._fetchCmcPrices()); }
 
 	_switchMode(next) {
@@ -196,6 +197,14 @@ export class PriceEngine {
 
 		updatePriceEngineStatus({ mode: next, violentSince: this.violentSince });
 		console.warn('PRICE', `⚠️  Mode: ${prev} → ${next}`);
+
+		logAnalysisEvent({
+			chainName: this.config.chainName,
+			eventType: 'MODE_SWITCH',
+			severity: 'WARN',
+			message: `Price engine mode: ${prev} → ${next}`,
+			data: { prev, next, violentSince: this.violentSince },
+		});
 
 		// Reschedule price loops only — candles never change interval
 		this._scheduleCgPrices();
@@ -341,11 +350,11 @@ export class PriceEngine {
 		const { priceFeeds } = getSteemDexBotData();
 
 		for (const id of this.coinIds) {
-			const sym  = this.symByCgId[id];
+			const sym = this.symByCgId[id];
 			const feed = priceFeeds[sym];
 			if (!feed?.cg?.usd || !feed?.cmc?.usd) continue;
 
-			const cg  = feed.cg.usd;
+			const cg = feed.cg.usd;
 			const cmc = feed.cmc.usd;
 			const mid = (cg + cmc) / 2;
 			if (mid === 0) continue;
@@ -359,7 +368,7 @@ export class PriceEngine {
 			this.lastDivAlertTime[sym] = Date.now();
 
 			const higher = cg > cmc ? 'CoinGecko' : 'CoinMarketCap';
-			const trend  = this._pastTrend(id);
+			const trend = this._pastTrend(id);
 
 			const alert = {
 				alert: 'PRICE_DIVERGENCE',
@@ -376,8 +385,16 @@ export class PriceEngine {
 			addDivergenceAlert(alert);
 			console.warn('ALERT', `🚨 Divergence ${sym}: ${alert.differencePercent}% gap`);
 
+			logAnalysisEvent({
+				chainName: this.config.chainName,
+				eventType: 'DIVERGENCE_ALERT',
+				severity: 'WARN',
+				message: `Price divergence ${sym}: ${alert.differencePercent}% gap`,
+				data: alert,
+			});
+
 			const msg = `🚨 <b>PRICE DIVERGENCE — ${sym}</b>\n\n<code>${JSON.stringify(alert, null, 2)}</code>`;
-			sendTelegramMessage(chatId, msg).catch(() => {});
+			sendTelegramMessage(chatId, msg).catch(() => { });
 		}
 	}
 
@@ -387,9 +404,9 @@ export class PriceEngine {
 		if (h.length < 3) return 'Insufficient data';
 
 		const last3 = h.slice(-3);
-		const up   = last3.every((c, i) => i === 0 || c.c >= last3[i - 1].c);
+		const up = last3.every((c, i) => i === 0 || c.c >= last3[i - 1].c);
 		const down = last3.every((c, i) => i === 0 || c.c <= last3[i - 1].c);
-		if (up)   return 'Uptrend (last 3h)';
+		if (up) return 'Uptrend (last 3h)';
 		if (down) return 'Downtrend (last 3h)';
 		return 'Sideways/Mixed (last 3h)';
 	}

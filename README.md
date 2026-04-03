@@ -165,6 +165,7 @@ Express.js with **file-based routing** (Nuxt 3 style, ported from hq-home).
 | `config/static/` | Immutable config loaded at boot: `general.json`, `logger.json`, `networks.json`. Change requires restart. |
 | `config/dynamic/` | Runtime-modifiable config: `wallets/`, `strategies/`, `chains/`. Updated via API or manually. |
 | `data/` | Persistent data: `executions/`, `market/`, `snapshots/`, `research/`. SQLite DB (`hq_blockchain.db`) also lives here. |
+| `documents/` | Build-time instructions and reference material. Contains the original step-by-step specs used to build the project. Not a live source of truth (evolution happens in chat). May host other document types in the future. |
 | `logs/` | Log files. `app.log` written by the logger (info/warn/error only). |
 | `testing/` | Tests. Mirrors source structure: `connectors/`, `core/`, `strategies/`, `api/`, `fixtures/`, `utils/`. |
 | `utils/` | General-purpose helpers (no business logic): `sleep.js`, `math.js`, `formatting.js`, `time.js`, `ids.js`. |
@@ -221,6 +222,7 @@ Express.js with **file-based routing** (Nuxt 3 style, ported from hq-home).
 - **Cron pattern**: `crons/taskName.js` default export async function, scheduled in `cronManager.js`
 - **Config**: secrets in `.env`, static config in `config/static/*.json`, runtime config in `config/dynamic/`
 - **Persistence**: SQLite for queries, JSONL for append-only, JSON for config files
+- **Dependency philosophy**: prefer a small amount of custom code over adding a library, to avoid version compatibility issues down the road. But don't reinvent the wheel — use well-supported, widely-adopted packages when they clearly earn their keep
 
 ---
 

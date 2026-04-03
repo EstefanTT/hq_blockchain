@@ -28,6 +28,14 @@ export const runtimeCache = {
 	// Chain connector (Step 2)
 	orderBooks: {},      // { 'steem:STEEM/SBD': { bids, asks, timestamp, midPrice, spread } }
 	recentTrades: {},    // { 'steem:STEEM/SBD': [trade, ...] }
+
+	// Storage stats (Step 3) — lightweight in-memory counters
+	storageStats: {
+		lastSnapshotTime: null,
+		tradesToday: 0,
+		snapshotsToday: 0,
+		currentPosition: null,   // { baseBalance, quoteBalance, averageEntryPrice, lastUpdated }
+	},
 };
 
 // ─── Actions ─────────────────────────────────────────────────
@@ -58,6 +66,12 @@ export function setLiveOrderBook(cacheKey, book) {
 }
 export function addRecentTrades(cacheKey, trades) {
 	return _addRecentTrades(runtimeCache, cacheKey, trades);
+}
+
+import _updateStorageStats from './actions/updateStorageStats.js';
+
+export function updateStorageStats(fields) {
+	return _updateStorageStats(runtimeCache, fields);
 }
 
 // ─── Getters ─────────────────────────────────────────────────

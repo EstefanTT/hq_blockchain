@@ -10,26 +10,26 @@ import {
 	updatePriceFeed,
 } from '../../../services/cache/index.js';
 
-const POLL_INTERVAL_MS      = 3_000;
+const POLL_INTERVAL_MS = 3_000;
 const IDLE_POLL_INTERVAL_MS = 10_000;
-const MAX_SEEN_IDS          = 400;
+const MAX_SEEN_IDS = 400;
 
 export class MarketPoller {
 
 	constructor(client, config) {
-		this.client      = client;
-		this.chainName   = config.chainName;
-		this.baseSymbol  = config.baseToken.symbol;
+		this.client = client;
+		this.chainName = config.chainName;
+		this.baseSymbol = config.baseToken.symbol;
 		this.quoteSymbol = config.quoteToken.symbol;
-		this.cacheKey    = `${config.chainName}:${config.baseToken.symbol}/${config.quoteToken.symbol}`;
+		this.cacheKey = `${config.chainName}:${config.baseToken.symbol}/${config.quoteToken.symbol}`;
 
-		this.running         = false;
-		this.paused          = false;
-		this.timer           = null;
+		this.running = false;
+		this.paused = false;
+		this.timer = null;
 		this.tradesAvailable = true;
-		this._tradesInit     = false;
-		this._firstBook      = false;
-		this.seenTradeIds    = new Set();
+		this._tradesInit = false;
+		this._firstBook = false;
+		this.seenTradeIds = new Set();
 
 		this.listeners = { orderBook: [], trade: [] };
 	}
@@ -45,7 +45,7 @@ export class MarketPoller {
 	start() {
 		if (this.running) return;
 		this.running = true;
-		this.paused  = false;
+		this.paused = false;
 		console.info('CHAIN', this.chainName.toUpperCase(), `📡 Market poller started (${this.cacheKey})`);
 		this._poll();
 	}
@@ -57,7 +57,7 @@ export class MarketPoller {
 		console.info('CHAIN', this.chainName.toUpperCase(), '🛑 Market poller stopped');
 	}
 
-	pause()  { this.paused = true;  console.info('CHAIN', this.chainName.toUpperCase(), '⏸️  Poller idle'); }
+	pause() { this.paused = true; console.info('CHAIN', this.chainName.toUpperCase(), '⏸️  Poller idle'); }
 	resume() { this.paused = false; console.info('CHAIN', this.chainName.toUpperCase(), '▶️  Poller resumed'); }
 
 	// ─── Poll loop ───────────────────────────────────────────
@@ -87,7 +87,7 @@ export class MarketPoller {
 	// ─── Order book ──────────────────────────────────────────
 
 	async _fetchOrderBook() {
-		const raw  = await this.client.getOrderBook(500);
+		const raw = await this.client.getOrderBook(500);
 		const book = normalizeOrderBook(raw, this.baseSymbol);
 
 		// Cache the normalized book
@@ -112,7 +112,7 @@ export class MarketPoller {
 	// ─── Recent trades ───────────────────────────────────────
 
 	async _fetchTrades() {
-		const raw    = await this.client.getRecentTrades(100);
+		const raw = await this.client.getRecentTrades(100);
 		const trades = normalizeTrades(raw, this.baseSymbol, this.quoteSymbol);
 
 		// First poll: seed cache + seen-set silently (no events)

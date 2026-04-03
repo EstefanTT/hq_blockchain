@@ -17,8 +17,8 @@ export function createSteemLikeAdapter(config) {
 
 	if (!nodes?.length) throw new Error(`No nodes configured for ${chainName}`);
 
-	const client   = new SteemLikeClient(nodes, chainName);
-	const poller   = new MarketPoller(client, config);
+	const client = new SteemLikeClient(nodes, chainName);
+	const poller = new MarketPoller(client, config);
 	const cacheKey = `${chainName}:${baseToken.symbol}/${quoteToken.symbol}`;
 
 	const adapter = {
@@ -47,7 +47,7 @@ export function createSteemLikeAdapter(config) {
 			poller.stop();
 		},
 
-		pause()  { poller.pause();  },
+		pause() { poller.pause(); },
 		resume() { poller.resume(); },
 
 		get client() { return client; },

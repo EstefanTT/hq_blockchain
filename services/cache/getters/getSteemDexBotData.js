@@ -1,5 +1,5 @@
 // services/cache/getters/getSteemDexBotData.js
-// Returns all bot data (prices, candles, engine status, alerts, order book, trades).
+// Returns all bot data (prices, candles, engine status, alerts, order book, trades, storage stats).
 
 export default function getSteemDexBotData(runtimeCache) {
 	return {
@@ -9,5 +9,6 @@ export default function getSteemDexBotData(runtimeCache) {
 		divergenceAlerts: runtimeCache.divergenceAlerts,
 		orderBooks: runtimeCache.orderBooks,
 		recentTrades: runtimeCache.recentTrades,
+		storageStats: runtimeCache.storageStats,
 	};
 }
