@@ -36,6 +36,17 @@ export const runtimeCache = {
 		snapshotsToday: 0,
 		currentPosition: null,   // { baseBalance, quoteBalance, averageEntryPrice, lastUpdated }
 	},
+
+	// Account data (Step 4) — balances, open orders, RC
+	accountData: {
+		account: null,
+		balance: null,        // e.g. "549.822 STEEM"
+		quoteBalance: null,   // e.g. "3.410 SBD"
+		vestingShares: null,
+		openOrders: [],
+		rc: null,             // { percentage, currentMana, maxMana }
+		lastRefresh: null,
+	},
 };
 
 // ─── Actions ─────────────────────────────────────────────────
@@ -69,9 +80,13 @@ export function addRecentTrades(cacheKey, trades) {
 }
 
 import _updateStorageStats from './actions/updateStorageStats.js';
+import _updateAccountData from './actions/updateAccountData.js';
 
 export function updateStorageStats(fields) {
 	return _updateStorageStats(runtimeCache, fields);
+}
+export function updateAccountData(fields) {
+	return _updateAccountData(runtimeCache, fields);
 }
 
 // ─── Getters ─────────────────────────────────────────────────

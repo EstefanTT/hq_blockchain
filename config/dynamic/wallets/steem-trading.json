@@ -1,0 +1,7 @@
+{
+	"label": "steem-trading",
+	"chainName": "steem",
+	"account": "STEEM_ACCOUNT",
+	"activeKeyEnv": "STEEM_ACTIVE_KEY",
+	"note": "Account name and key are read from process.env at runtime. Values here are env var names, not secrets."
+}

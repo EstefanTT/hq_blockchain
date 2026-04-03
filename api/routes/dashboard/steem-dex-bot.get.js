@@ -127,9 +127,16 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 	</div>
 
 	<!-- Storage Status -->
-	<div class="card">
+	<div class="card mb-4">
 		<h2 class="text-base font-bold mb-3 text-gray-300">💾 Storage Status</h2>
 		<div id="storage-info" class="text-gray-500 text-sm">Waiting for data…</div>
+	</div>
+
+	<!-- Account & Orders (Step 4) -->
+	<div class="card mb-4">
+		<h2 class="text-base font-bold mb-3 text-gray-300">👤 Account &amp; Orders</h2>
+		<div id="account-info" class="text-gray-500 text-sm">Waiting for data…</div>
+		<div id="open-orders" class="mt-3"></div>
 	</div>
 
 	<!-- Footer -->
@@ -179,6 +186,7 @@ function render(d) {
 	renderCandles(d.candles);
 	renderAlerts(d.divergenceAlerts);
 	renderStorage(d.storageStats);
+	renderAccount(d.accountData);
 }
 
 function renderEngine(e) {
@@ -323,6 +331,84 @@ function renderStorage(s) {
 }
 
 // ─── Helpers ────────────────────────────────────────────────
+function renderAccount(ad) {
+	var el = document.getElementById('account-info');
+	var ordersEl = document.getElementById('open-orders');
+	if (!ad || !ad.account) {
+		el.innerHTML = '<span class="text-gray-600">No account configured</span>';
+		ordersEl.innerHTML = '';
+		return;
+	}
+
+	var rcPct = ad.rc?.percentage ?? 0;
+	var rcColor = rcPct > 50 ? 'text-green-400' : rcPct > 20 ? 'text-yellow-400' : 'text-red-400';
+
+	el.innerHTML =
+		'<div class="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1">' +
+			'<div>Account: <span class="text-white font-medium">@' + esc(ad.account) + '</span></div>' +
+			'<div>STEEM: <span class="text-white font-medium">' + esc(ad.balance || '—') + '</span></div>' +
+			'<div>SBD: <span class="text-white font-medium">' + esc(ad.quoteBalance || '—') + '</span></div>' +
+			'<div>RC: <span class="' + rcColor + ' font-medium">' + (ad.rc ? rcPct.toFixed(1) + '%' : '—') + '</span></div>' +
+			'<div>Open orders: <span class="text-white">' + (ad.openOrders?.length ?? 0) + '</span></div>' +
+			'<div>Refreshed: ' + tAgo(ad.lastRefresh) + '</div>' +
+		'</div>';
+
+	// Open orders table
+	var orders = ad.openOrders || [];
+	if (!orders.length) {
+		ordersEl.innerHTML = '<div class="text-xs text-gray-600 mt-2">No open orders</div>';
+		return;
+	}
+
+	ordersEl.innerHTML =
+		'<div class="text-xs font-bold text-gray-400 mb-1 mt-2">Open Orders</div>' +
+		'<div class="overflow-x-auto">' +
+		'<table class="w-full text-sm">' +
+			'<thead><tr class="text-gray-500 border-b border-gray-700">' +
+				'<th class="text-left py-1">ID</th>' +
+				'<th class="text-right py-1 px-2">Side</th>' +
+				'<th class="text-right py-1 px-2">Price (SBD)</th>' +
+				'<th class="text-right py-1 px-2">Amount (STEEM)</th>' +
+				'<th class="text-right py-1 px-2">Expires</th>' +
+				'<th class="text-right py-1"></th>' +
+			'</tr></thead>' +
+			'<tbody>' + orders.map(function(o) {
+				var color = o.side === 'buy' ? 'text-green-400' : 'text-red-400';
+				return '<tr class="border-t border-gray-700/30">' +
+					'<td class="py-0.5 text-gray-400">' + o.orderId + '</td>' +
+					'<td class="text-right py-0.5 px-2 ' + color + '">' + o.side.toUpperCase() + '</td>' +
+					'<td class="text-right py-0.5 px-2">' + o.price.toFixed(4) + '</td>' +
+					'<td class="text-right py-0.5 px-2">' + o.amountBase.toFixed(3) + '</td>' +
+					'<td class="text-right py-0.5 px-2 text-gray-500">' + new Date(o.expiration + 'Z').toLocaleDateString() + '</td>' +
+					'<td class="text-right py-0.5">' +
+						'<button onclick="cancelOrder(' + o.orderId + ')" ' +
+							'class="text-xs bg-red-600/20 hover:bg-red-600/40 text-red-400 px-2 py-0.5 rounded transition-colors">' +
+							'Cancel</button>' +
+					'</td>' +
+				'</tr>';
+			}).join('') +
+			'</tbody></table></div>';
+}
+
+async function cancelOrder(orderId) {
+	if (!confirm('Cancel order #' + orderId + '?')) return;
+	var token = document.getElementById('token').value;
+	if (!token) { alert('Enter API token first'); return; }
+	try {
+		var res = await fetch('/api/execution/cancel-order', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'X-API-Token': token },
+			body: JSON.stringify({ orderId: orderId }),
+		});
+		if (!res.ok) throw new Error('HTTP ' + res.status);
+		var data = await res.json();
+		alert(data.ok ? 'Order #' + orderId + ' cancelled' : 'Failed: ' + (data.error || 'unknown'));
+		fetchData();
+	} catch (e) {
+		alert('Cancel failed: ' + e.message);
+	}
+}
+
 function tAgo(iso) {
 	if (!iso) return '—';
 	var s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);

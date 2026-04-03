@@ -1,6 +1,7 @@
 // apps/steem-dex-bot/index.js
 // STEEM/SBD DEX trading bot — multi-chain ready skeleton.
-// Wires the price engine (Step 1), chain connector (Step 2), and SQLite storage (Step 3).
+// Wires the price engine (Step 1), chain connector (Step 2), SQLite storage (Step 3),
+// and order operations (Step 4).
 
 import { readFileSync } from 'fs';
 import path from 'path';
@@ -9,11 +10,13 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = JSON.parse(readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
 
-const SNAPSHOT_INTERVAL_MS = 30_000; // 30s periodic order book snapshots
+const SNAPSHOT_INTERVAL_MS = 30_000;     // 30s periodic order book snapshots
+const ACCOUNT_REFRESH_MS = 60_000;       // 60s periodic account data refresh
 
 let priceEngine = null;
 let chainAdapter = null;
 let snapshotTimer = null;
+let accountTimer = null;
 
 export async function init() {
 	if (!config.enabled) {
@@ -26,7 +29,7 @@ export async function init() {
 
 	// Initialize SQLite tables (lazy, but we want them ready at boot)
 	const { saveOrderBookSnapshot, addTrades, logAnalysisEvent, getCurrentPosition, countTradesToday } = await import('../../services/storage/steemDexStore.js');
-	const { getLiveOrderBook, updateStorageStats, getSteemDexBotData } = await import('../../services/cache/index.js');
+	const { getLiveOrderBook, updateStorageStats, updateAccountData, getSteemDexBotData } = await import('../../services/cache/index.js');
 
 	const { chainName } = config;
 	const base = config.baseToken.symbol;
@@ -76,6 +79,42 @@ export async function init() {
 
 	await chainAdapter.start();
 
+	// ─── Initialize order operations (Step 4) ────────────────────
+	const steemAccount = process.env.STEEM_ACCOUNT;
+	const steemActiveKey = process.env.STEEM_ACTIVE_KEY;
+
+	if (steemAccount && steemActiveKey) {
+		chainAdapter.initOperations({ account: steemAccount, activeKey: steemActiveKey });
+
+		// Helper: refresh account data and push to cache
+		async function refreshAccountData() {
+			try {
+				const [balances, openOrders, rc] = await Promise.all([
+					chainAdapter.getAccountBalances(),
+					chainAdapter.getOpenOrders(),
+					chainAdapter.getAccountRC(),
+				]);
+				updateAccountData({
+					account: balances.account,
+					balance: balances.balance,
+					quoteBalance: balances.quoteBalance,
+					vestingShares: balances.vestingShares,
+					openOrders,
+					rc,
+					lastRefresh: new Date().toISOString(),
+				});
+			} catch (err) {
+				console.warn('BOT', 'STEEM-DEX', `Account refresh failed: ${err.message}`);
+			}
+		}
+
+		// Initial fetch + periodic refresh
+		await refreshAccountData();
+		accountTimer = setInterval(refreshAccountData, ACCOUNT_REFRESH_MS);
+	} else {
+		console.warn('BOT', 'STEEM-DEX', '⚠️  STEEM_ACCOUNT / STEEM_ACTIVE_KEY not set — operations disabled');
+	}
+
 	// Periodic order book snapshots (every 30s)
 	snapshotTimer = setInterval(() => {
 		const book = getLiveOrderBook(cacheKey);
@@ -112,6 +151,7 @@ export async function init() {
 export async function shutdown() {
 	console.info('BOT', 'STEEM-DEX', '🛑 Shutting down...');
 	if (snapshotTimer) clearInterval(snapshotTimer);
+	if (accountTimer) clearInterval(accountTimer);
 	if (chainAdapter) await chainAdapter.stop();
 	if (priceEngine) await priceEngine.stop();
 
