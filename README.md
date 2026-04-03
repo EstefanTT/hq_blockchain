@@ -232,3 +232,5 @@ npm install
 npm run dev              # development with --watch
 npm start                # production
 ```
+
+## Human notes to be integrated nicely here above : 

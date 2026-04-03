@@ -1,0 +1,22 @@
+{
+	"name": "steem-dex-bot",
+	"enabled": true,
+	"chainName": "steem",
+	"nodes": [
+		"https://api.steemit.com",
+		"https://api.moecki.online"
+	],
+	"baseToken": {
+		"symbol": "STEEM",
+		"coingeckoId": "steem",
+		"cmcSymbol": "STEEM"
+	},
+	"quoteToken": {
+		"symbol": "SBD",
+		"coingeckoId": "steem-dollars",
+		"cmcSymbol": "SBD"
+	},
+	"maxOrderSizeBase": 0,
+	"maxOrderSizeQuote": 0,
+	"tinyPyramidBaseSizeQuote": 0
+}

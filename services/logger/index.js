@@ -61,6 +61,8 @@ const contextMap = {
 	STRAT:   "🎯",
 	BOT:     "🤖",
 	ANALYT:  "🔬",
+	PRICE:   "💲",
+	ALERT:   "🚨",
 
 	// Default
 	DEFAULT: "📄",

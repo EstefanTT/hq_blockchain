@@ -53,6 +53,9 @@ async function run() {
 	// const { init: initSpreadBot } = await import('./apps/spread-bot/index.js');
 	// await initSpreadBot();
 
+	const { init: initSteemDexBot } = await import('./apps/steem-dex-bot/index.js');
+	await initSteemDexBot();
+
 	console.info('START', 'App ready ✅');
 }
 
