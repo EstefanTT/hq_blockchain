@@ -16,6 +16,10 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 <style>
 	body { font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace; }
 	.card { @apply bg-gray-800 rounded-lg p-4 border border-gray-700; }
+	.section-title {
+		@apply text-sm font-bold tracking-wide text-gray-200 px-3 py-2 -mx-4 -mt-4 mb-3 rounded-t-lg border-b border-gray-600/50;
+		background: linear-gradient(135deg, rgba(55,65,81,0.9), rgba(31,41,55,0.7));
+	}
 	.fade-in { animation: fadeIn 0.3s ease-in; }
 	@keyframes fadeIn { from { opacity: 0.5; } to { opacity: 1; } }
 </style>
@@ -37,14 +41,35 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 		</div>
 	</div>
 
+	<!-- Controls (Step 14) -->
+	<div class="flex flex-wrap items-center gap-2 mb-6 p-3 bg-gray-800 rounded-lg border border-gray-700">
+		<button id="btn-pause" onclick="emergencyPause()"
+			class="bg-red-600 hover:bg-red-500 px-3 py-1.5 rounded text-sm font-bold transition-colors">🚨 Emergency Pause</button>
+		<label class="flex items-center gap-2 text-sm">
+			<input id="chk-dryrun" type="checkbox" onchange="toggleDryRun(this.checked)"
+				class="accent-yellow-400 w-4 h-4" />
+			<span>🧪 Dry-Run</span>
+			<span id="dryrun-badge" class="hidden px-1.5 py-0.5 bg-yellow-600/30 text-yellow-400 text-xs rounded font-bold">DRY</span>
+		</label>
+		<select id="sel-mode" onchange="switchMode(this.value)" class="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+			<option value="">— Switch Mode —</option>
+			<option value="market-making">Market Making</option>
+			<option value="aggressive-sniping">Aggressive Sniping</option>
+			<option value="grid-range">Grid Range</option>
+			<option value="mean-reversion">Mean Reversion</option>
+			<option value="defensive">Defensive</option>
+			<option value="bot-exploitation">Bot Exploitation</option>
+		</select>
+	</div>
+
 	<!-- Engine Status -->
-	<div class="card mb-4">
-		<h2 class="text-base font-bold mb-3 text-gray-300">⚙️ Engine Status</h2>
+	<div class="card mb-6">
+		<h2 class="section-title">⚙️ Engine Status</h2>
 		<div id="engine-info" class="text-gray-500 text-sm">Waiting for data…</div>
 	</div>
 
 	<!-- Prices -->
-	<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+	<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
 		<div class="card">
 			<h2 class="text-base font-bold mb-2 text-gray-300">STEEM</h2>
 			<div id="price-STEEM" class="text-gray-500 text-sm">—</div>
@@ -56,8 +81,8 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 	</div>
 
 	<!-- Order Book -->
-	<div class="card mb-4">
-		<h2 class="text-base font-bold mb-3 text-gray-300">📖 DEX Order Book — STEEM/SBD</h2>
+	<div class="card mb-6">
+		<h2 class="section-title">📖 DEX Order Book — STEEM/SBD</h2>
 		<div class="grid grid-cols-2 gap-4">
 			<div>
 				<div class="text-green-500 text-xs font-bold mb-1">BIDS (Buy)</div>
@@ -84,8 +109,8 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 	</div>
 
 	<!-- Recent DEX Trades -->
-	<div class="card mb-4">
-		<h2 class="text-base font-bold mb-3 text-gray-300">🔄 Recent DEX Trades</h2>
+	<div class="card mb-6">
+		<h2 class="section-title">🔄 Recent DEX Trades</h2>
 		<div class="overflow-x-auto">
 			<table class="w-full text-sm">
 				<thead><tr class="text-gray-500 border-b border-gray-700">
@@ -100,8 +125,8 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 	</div>
 
 	<!-- Candles -->
-	<div class="card mb-4">
-		<h2 class="text-base font-bold mb-3 text-gray-300">📊 Recent Candles — STEEM</h2>
+	<div class="card mb-6">
+		<h2 class="section-title">📊 Recent Candles — STEEM</h2>
 		<div class="overflow-x-auto">
 			<table class="w-full text-sm">
 				<thead>
@@ -121,47 +146,88 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 	</div>
 
 	<!-- Alerts -->
-	<div class="card mb-4">
-		<h2 class="text-base font-bold mb-3 text-gray-300">🚨 Divergence Alerts</h2>
+	<div class="card mb-6">
+		<h2 class="section-title">🚨 Divergence Alerts</h2>
 		<div id="alerts-list" class="text-gray-500 text-sm">None</div>
 	</div>
 
 	<!-- Storage Status -->
-	<div class="card mb-4">
-		<h2 class="text-base font-bold mb-3 text-gray-300">💾 Storage Status</h2>
+	<div class="card mb-6">
+		<h2 class="section-title">💾 Storage Status</h2>
 		<div id="storage-info" class="text-gray-500 text-sm">Waiting for data…</div>
 	</div>
 
 	<!-- Account & Orders (Step 4) -->
-	<div class="card mb-4">
-		<h2 class="text-base font-bold mb-3 text-gray-300">👤 Account &amp; Orders</h2>
+	<div class="card mb-6">
+		<h2 class="section-title">👤 Account &amp; Orders</h2>
 		<div id="account-info" class="text-gray-500 text-sm">Waiting for data…</div>
 		<div id="open-orders" class="mt-3"></div>
 	</div>
 
 	<!-- Micro Layer Status (Step 6) -->
-	<div class="card mb-4">
-		<h2 class="text-base font-bold mb-3 text-gray-300">🔹 Micro Layer Status</h2>
+	<div class="card mb-6">
+		<h2 class="section-title">🔹 Micro Layer Status</h2>
 		<div id="micro-layer" class="text-gray-500 text-sm">Waiting for data…</div>
 	</div>
 
 	<!-- Active Strategy (Step 7) -->
-	<div class="card mb-4">
-		<h2 class="text-base font-bold mb-3 text-gray-300">📊 Active Strategy</h2>
+	<div class="card mb-6">
+		<h2 class="section-title">📊 Active Strategy</h2>
 		<div id="strategy-status" class="text-gray-500 text-sm">Waiting for data…</div>
 	</div>
 
 	<!-- Brain Status (Step 8) -->
-	<div class="card mb-4">
-		<h2 class="text-base font-bold mb-3 text-gray-300">🧠 Brain Status</h2>
+	<div class="card mb-6">
+		<h2 class="section-title">🧠 Brain Status</h2>
 		<div id="brain-status" class="text-gray-500 text-sm">Waiting for data…</div>
 	</div>
 
+	<!-- Risk Status (Step 13) -->
+	<div class="card mb-6">
+		<h2 class="section-title">🛡️ Risk Status</h2>
+		<div id="risk-status" class="text-gray-500 text-sm">Waiting for data…</div>
+	</div>
+
+	<!-- Bot Exploitation Status (Step 13) -->
+	<div class="card mb-6">
+		<h2 class="section-title">🕵️ Bot Exploitation</h2>
+		<div id="exploit-status" class="text-gray-500 text-sm">Waiting for data…</div>
+	</div>
+
 	<!-- Recent Bot Logs (Step 5) -->
-	<div class="card mb-4">
-		<h2 class="text-base font-bold mb-3 text-gray-300">📋 Recent Bot Logs</h2>
+	<div class="card mb-6">
+		<h2 class="section-title">📋 Recent Bot Logs</h2>
 		<div id="bot-logs" class="text-gray-500 text-sm">Waiting for data…</div>
 		<div class="text-xs text-gray-600 mt-2">Full log: <code>logs/bot.log</code></div>
+	</div>
+
+	<!-- Analysis Tools (Step 15) -->
+	<div class="card mb-6">
+		<h2 class="section-title">🔬 Analysis Tools</h2>
+		<p class="text-gray-400 text-xs mb-3">Run these from the project root terminal:</p>
+		<div class="space-y-2 text-xs">
+			<div>
+				<span class="text-gray-400 font-semibold">Daily summary:</span>
+				<code class="block bg-gray-800 rounded px-2 py-1 mt-1 text-green-300 select-all">npm run summary</code>
+			</div>
+			<div>
+				<span class="text-gray-400 font-semibold">Log analysis (last 7 days):</span>
+				<code class="block bg-gray-800 rounded px-2 py-1 mt-1 text-green-300 select-all">npm run analyze -- --days 7</code>
+			</div>
+			<div>
+				<span class="text-gray-400 font-semibold">Backtest market-making:</span>
+				<code class="block bg-gray-800 rounded px-2 py-1 mt-1 text-green-300 select-all">npm run backtest -- --strategy market-making --days 30</code>
+			</div>
+			<div>
+				<span class="text-gray-400 font-semibold">Backtest grid-range + CSV:</span>
+				<code class="block bg-gray-800 rounded px-2 py-1 mt-1 text-green-300 select-all">npm run backtest -- --strategy grid-range --csv</code>
+			</div>
+			<div>
+				<span class="text-gray-400 font-semibold">Filter by strategy:</span>
+				<code class="block bg-gray-800 rounded px-2 py-1 mt-1 text-green-300 select-all">npm run analyze -- --strategy brain --days 14</code>
+			</div>
+		</div>
+		<p class="text-gray-600 text-xs mt-2">CSV exports saved to <code>data/reports/</code></p>
 	</div>
 
 	<!-- Footer -->
@@ -216,8 +282,11 @@ function render(d) {
 	renderMicroLayer(d.microLayerStatus);
 	renderStrategy(d.strategyStatus);
 	renderBrain(d.brainStatus);
+	renderRisk(d.riskStatus);
+	renderExploit(d.exploitationStatus);
 	renderBotLogs(d.recentBotLogs);
 	renderAppSize(d.appSizeInfo);
+	renderDryRunState(d.dryRunEnabled);
 }
 
 function renderEngine(e) {
@@ -417,6 +486,7 @@ function renderBrain(br) {
 		'grid-range': 'text-cyan-400',
 		'mean-reversion': 'text-purple-400',
 		'defensive': 'text-red-400',
+		'bot-exploitation': 'text-yellow-400',
 	};
 	var mc = modeColors[br.currentMode] || 'text-gray-400';
 
@@ -440,6 +510,36 @@ function renderBrain(br) {
 		'</div>' +
 		(br.lastSwitchReason ? '<div class="text-xs text-gray-400 mt-1">💬 ' + esc(br.lastSwitchReason) + '</div>' : '') +
 		sigHtml;
+}
+
+function renderRisk(r) {
+	var el = document.getElementById('risk-status');
+	if (!r) { el.innerHTML = '<span class="text-gray-600">No risk data</span>'; return; }
+
+	var rebalHtml = r.lastRebalanceTime
+		? '<div class="text-xs text-gray-400 mt-1">🔄 Last rebalance: ' + r.lastRebalanceSide + ' ' + (r.lastRebalanceAmount || 0) + ' @ ' + (r.lastRebalancePrice || 0) + ' (' + tAgo(r.lastRebalanceTime) + ')</div>'
+		: '';
+
+	el.innerHTML =
+		'<div class="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1">' +
+			'<div>Slippage rejects: <span class="text-yellow-400 font-medium">' + (r.slippageRejectCount || 0) + '</span></div>' +
+			'<div>Last reject: ' + (r.lastSlippageReject ? tAgo(r.lastSlippageReject) : '<span class="text-gray-600">—</span>') + '</div>' +
+		'</div>' +
+		rebalHtml;
+}
+
+function renderExploit(ex) {
+	var el = document.getElementById('exploit-status');
+	if (!ex) { el.innerHTML = '<span class="text-gray-600">No exploitation data</span>'; return; }
+
+	var ac = ex.active ? 'text-green-400' : 'text-gray-500';
+	el.innerHTML =
+		'<div class="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1">' +
+			'<div>Active: <span class="' + ac + '">' + (ex.active ? 'Yes ✅' : 'No') + '</span></div>' +
+			'<div>Cycles: <span class="text-white">' + (ex.cycleCount || 0) + '</span></div>' +
+			'<div>Phase: <span class="text-cyan-400">' + esc(ex.phase || 'idle') + '</span></div>' +
+		'</div>' +
+		(ex.lastAction ? '<div class="text-xs text-gray-400 mt-1">💬 ' + esc(ex.lastAction) + '</div>' : '');
 }
 
 function renderBotLogs(logs) {
@@ -519,6 +619,61 @@ function renderAccount(ad) {
 				'</tr>';
 			}).join('') +
 			'</tbody></table></div>';
+}
+
+// ─── Dashboard controls (Step 14) ───────────────────────────
+function renderDryRunState(enabled) {
+	var chk = document.getElementById('chk-dryrun');
+	var badge = document.getElementById('dryrun-badge');
+	chk.checked = !!enabled;
+	badge.classList.toggle('hidden', !enabled);
+}
+
+async function emergencyPause() {
+	if (!confirm('Emergency Pause — force defensive mode?')) return;
+	var token = document.getElementById('token').value;
+	if (!token) { alert('Enter API token first'); return; }
+	try {
+		var res = await fetch('/api/execution/pause', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'X-API-Token': token },
+		});
+		var data = await res.json();
+		alert(data.ok ? '🚨 ' + data.message : 'Failed: ' + (data.error || 'unknown'));
+		fetchData();
+	} catch (e) { alert('Pause failed: ' + e.message); }
+}
+
+async function toggleDryRun(enabled) {
+	var token = document.getElementById('token').value;
+	if (!token) { alert('Enter API token first'); return; }
+	try {
+		var res = await fetch('/api/execution/set-dry-run', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'X-API-Token': token },
+			body: JSON.stringify({ enabled: enabled }),
+		});
+		var data = await res.json();
+		if (!data.ok) alert('Failed: ' + (data.error || 'unknown'));
+		fetchData();
+	} catch (e) { alert('Toggle failed: ' + e.message); }
+}
+
+async function switchMode(mode) {
+	if (!mode) return;
+	var token = document.getElementById('token').value;
+	if (!token) { alert('Enter API token first'); document.getElementById('sel-mode').value = ''; return; }
+	try {
+		var res = await fetch('/api/execution/switch-mode', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'X-API-Token': token },
+			body: JSON.stringify({ mode: mode }),
+		});
+		var data = await res.json();
+		if (!data.ok) alert('Failed: ' + (data.error || 'unknown'));
+		document.getElementById('sel-mode').value = '';
+		fetchData();
+	} catch (e) { alert('Switch failed: ' + e.message); document.getElementById('sel-mode').value = ''; }
 }
 
 async function cancelOrder(orderId) {

@@ -1,0 +1,41 @@
+timestamp,eventType,severity,strategy,message
+2026-04-04T08:49:45.850Z,MODE,WARN,NONE,⚠️  Mode: normal → violent
+2026-04-04T09:18:29.843Z,MODE,WARN,NONE,⚠️  Mode: normal → violent
+2026-04-04T09:42:13.829Z,MODE,WARN,NONE,⚠️  Mode: normal → violent
+2026-04-04T09:42:38.910Z,BRAIN,INFO,NONE,🧠 Brain starting...
+2026-04-04T09:42:38.910Z,BRAIN,INFO,NONE,🔀 Mode switch: none → grid-range
+2026-04-04T09:42:38.910Z,BRAIN,INFO,NONE,"⚠️ Mode ""grid-range"" not available yet — falling back to market-making"
+2026-04-04T09:42:41.783Z,BRAIN,INFO,NONE,✅ Brain active
+2026-04-04T10:02:33.411Z,BRAIN,INFO,NONE,🧠 Brain starting...
+2026-04-04T10:02:33.413Z,BRAIN,INFO,NONE,🔀 Mode switch: none → grid-range
+2026-04-04T10:02:33.414Z,BRAIN,INFO,NONE,"⚠️ Mode ""grid-range"" not available yet — falling back to market-making"
+2026-04-04T10:02:35.830Z,BRAIN,INFO,NONE,✅ Brain active
+2026-04-04T10:15:18.548Z,BRAIN,INFO,NONE,🧠 Brain starting...
+2026-04-04T10:15:18.548Z,BRAIN,INFO,NONE,🔀 Mode switch: none → market-making
+2026-04-04T10:15:23.865Z,BRAIN,INFO,NONE,✅ Brain active
+2026-04-04T11:34:02.881Z,BRAIN,INFO,NONE,🧠 Brain starting...
+2026-04-04T11:34:02.882Z,BRAIN,INFO,NONE,🔀 Mode switch: none → grid-range
+2026-04-04T11:34:05.703Z,BRAIN,INFO,NONE,✅ Brain active
+2026-04-04T11:35:53.723Z,BRAIN,INFO,NONE,🔀 Mode switch: grid-range → market-making
+2026-04-04T11:36:29.723Z,BRAIN,INFO,NONE,🔀 Mode switch: market-making → grid-range
+2026-04-04T11:36:35.724Z,BRAIN,INFO,NONE,"📋 Strategy ""market-making"" self-completed — re-evaluating"
+2026-04-04T11:36:35.725Z,BRAIN,INFO,NONE,🔀 Mode switch: none → grid-range
+2026-04-04T11:38:29.743Z,BRAIN,INFO,NONE,🔀 Mode switch: grid-range → market-making
+2026-04-04T11:38:59.749Z,BRAIN,INFO,NONE,🔀 Mode switch: market-making → grid-range
+2026-04-04T11:39:05.750Z,BRAIN,INFO,NONE,"📋 Strategy ""market-making"" self-completed — re-evaluating"
+2026-04-04T11:39:05.751Z,BRAIN,INFO,NONE,🔀 Mode switch: none → grid-range
+2026-04-04T11:40:41.761Z,BRAIN,INFO,NONE,🔀 Mode switch: grid-range → market-making
+2026-04-04T11:41:11.765Z,BRAIN,INFO,NONE,🔀 Mode switch: market-making → grid-range
+2026-04-04T11:41:17.765Z,BRAIN,INFO,NONE,"📋 Strategy ""market-making"" self-completed — re-evaluating"
+2026-04-04T11:41:17.765Z,BRAIN,INFO,NONE,🔀 Mode switch: none → grid-range
+2026-04-04T11:42:59.782Z,BRAIN,INFO,NONE,🔀 Mode switch: grid-range → market-making
+2026-04-04T11:43:29.782Z,BRAIN,INFO,NONE,🔀 Mode switch: market-making → grid-range
+2026-04-04T11:45:17.793Z,BRAIN,INFO,NONE,🔀 Mode switch: grid-range → market-making
+2026-04-04T11:45:47.797Z,BRAIN,INFO,NONE,🔀 Mode switch: market-making → grid-range
+2026-04-04T11:45:53.796Z,BRAIN,INFO,NONE,"📋 Strategy ""market-making"" self-completed — re-evaluating"
+2026-04-04T11:45:53.797Z,BRAIN,INFO,NONE,🔀 Mode switch: none → grid-range
+2026-04-04T11:47:29.810Z,BRAIN,INFO,NONE,🔀 Mode switch: grid-range → market-making
+2026-04-04T11:47:59.815Z,BRAIN,INFO,NONE,🔀 Mode switch: market-making → grid-range
+2026-04-04T11:48:05.816Z,BRAIN,INFO,NONE,"📋 Strategy ""market-making"" self-completed — re-evaluating"
+2026-04-04T11:48:05.816Z,BRAIN,INFO,NONE,🔀 Mode switch: none → grid-range
+2026-04-04T11:49:41.831Z,BRAIN,INFO,NONE,🔀 Mode switch: grid-range → market-making

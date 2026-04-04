@@ -325,3 +325,52 @@ export function countTradesToday(chainName, baseToken, quoteToken) {
 	const row = stmts().countTradesToday.get({ chainName, baseToken, quoteToken, todayStart: todayStart.toISOString() });
 	return row?.count ?? 0;
 }
+
+// ─── Date-range reads (Step 15 — analysis scripts) ──────────
+
+/**
+ * Get analysis log entries for a chain within a date range.
+ * @param {string} chainName
+ * @param {string} since  — ISO 8601 start (inclusive)
+ * @param {string} until  — ISO 8601 end   (inclusive)
+ * @returns {Array}
+ */
+export function getAnalysisLogsByDateRange(chainName, since, until) {
+	ensureTables();
+	const db = getDb();
+	return db.prepare(`
+		SELECT id, timestamp, chainName, eventType, severity, message, data, strategy
+		FROM analysis_log
+		WHERE chainName = @chainName AND timestamp >= @since AND timestamp <= @until
+		ORDER BY timestamp ASC
+	`).all({ chainName, since, until });
+}
+
+/**
+ * Get order book snapshots for a chain+pair within a date range.
+ */
+export function getSnapshotsByDateRange(chainName, baseToken, quoteToken, since, until) {
+	ensureTables();
+	const db = getDb();
+	const rows = db.prepare(`
+		SELECT * FROM order_book_snapshots
+		WHERE chainName = @chainName AND baseToken = @baseToken AND quoteToken = @quoteToken
+		      AND timestamp >= @since AND timestamp <= @until
+		ORDER BY timestamp ASC
+	`).all({ chainName, baseToken, quoteToken, since, until });
+	return rows.map(r => ({ ...r, bids: JSON.parse(r.bids), asks: JSON.parse(r.asks) }));
+}
+
+/**
+ * Get trades for a chain+pair within a date range.
+ */
+export function getTradesByDateRange(chainName, baseToken, quoteToken, since, until) {
+	ensureTables();
+	const db = getDb();
+	return db.prepare(`
+		SELECT * FROM trades_history
+		WHERE chainName = @chainName AND baseToken = @baseToken AND quoteToken = @quoteToken
+		      AND timestamp >= @since AND timestamp <= @until
+		ORDER BY timestamp ASC
+	`).all({ chainName, baseToken, quoteToken, since, until });
+}

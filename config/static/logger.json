@@ -34,7 +34,6 @@
 		"MM": "📊",
 		"BRAIN": "🧠",
 		"SNIPE": "🎯",
-		"GRID": "📐",
-		"DEFAULT": "📄"
+		"GRID": "📐",		"REVERT": "🔃",		"PAUSE": "⏸️",		"EXPLOIT": "🕵️",		"DEFAULT": "📄"
 	}
 }

@@ -4,7 +4,7 @@
 // from runtimeCache (zero API calls). Sole owner of strategy start/stop.
 //
 // Modes: market-making (default), aggressive-sniping, grid-range,
-//        mean-reversion, defensive.
+//        mean-reversion, defensive, bot-exploitation.
 
 // ─── Constants ───────────────────────────────────────────────
 
@@ -14,9 +14,10 @@ const MODES = {
 	GRID_RANGE: 'grid-range',
 	MEAN_REVERSION: 'mean-reversion',
 	DEFENSIVE: 'defensive',
+	BOT_EXPLOITATION: 'bot-exploitation',
 };
 
-const AVAILABLE_MODES = new Set([MODES.MARKET_MAKING, MODES.AGGRESSIVE_SNIPING, MODES.GRID_RANGE]);
+const AVAILABLE_MODES = new Set([MODES.MARKET_MAKING, MODES.AGGRESSIVE_SNIPING, MODES.GRID_RANGE, MODES.MEAN_REVERSION, MODES.DEFENSIVE, MODES.BOT_EXPLOITATION]);
 
 // ─── State ───────────────────────────────────────────────────
 
@@ -32,13 +33,18 @@ let cfg = null;
 let log = null;
 let adapter = null;
 let cache = null;          // { getSteemDexBotData, updateBrainStatus, updateStrategyStatus }
-let strategyConfigs = null; // { marketMaking, aggressiveSniping, gridRange }
+let strategyConfigs = null; // { marketMaking, aggressiveSniping, gridRange, meanReversion, defensivePause, botExploitation, risk }
 let cacheKey = null;       // e.g. 'steem:STEEM/SBD'
 
 // Strategy module references (lazy-loaded)
 let mmModule = null;
 let snipeModule = null;
 let gridModule = null;
+let reversionModule = null;
+let defensiveModule = null;
+let exploitModule = null;
+let rebalanceModule = null;
+let rcWarningLogged = false;
 
 // ─── Public API ──────────────────────────────────────────────
 
@@ -106,6 +112,26 @@ export function isBrainRunning() { return running; }
 export function getCurrentMode() { return currentMode; }
 export function getLastSwitchReason() { return lastSwitchReason; }
 
+/**
+ * Force a specific mode (bypasses _decide for one tick).
+ * Used by the /api/execution/switch-mode endpoint.
+ * @param {string} mode — one of MODES values
+ */
+export async function forceMode(mode) {
+	if (!running) return;
+	if (!AVAILABLE_MODES.has(mode)) return;
+	if (mode === currentMode) return;
+
+	log?.info('BRAIN', `⚡ Forced mode switch → ${mode}`, { eventType: 'FORCED_SWITCH', from: currentMode, to: mode });
+
+	await _stopCurrentStrategy();
+	currentMode = mode;
+	lastSwitchTime = new Date().toISOString();
+	lastSwitchReason = `Manual override → ${mode}`;
+	await _startStrategy(mode);
+	_pushStatus();
+}
+
 // ─── Internal: Tick ──────────────────────────────────────────
 
 async function _tick() {
@@ -126,6 +152,12 @@ async function _tick() {
 		if (desired !== currentMode) {
 			await _switchTo(desired, signals);
 		}
+
+		// RC warning zone (D4): warn when approaching the threshold
+		_checkRCWarning(signals);
+
+		// Rebalance safety net: check on every tick
+		await _checkRebalance();
 
 		_pushStatus();
 	} catch (err) {
@@ -198,6 +230,7 @@ function _collectSignals() {
 		volatileMode,
 		microLayerActive: microLayer.active ?? false,
 		currentStrategyActive: strategy.active ?? false,
+		totalBookDepth: +(bidDepth + askDepth).toFixed(4),
 	};
 }
 
@@ -205,7 +238,7 @@ function _collectSignals() {
 
 function _decide(s) {
 	// ─── Safety overrides (always first) ─────────────────────
-	if (s.rcPercent < cfg.rcMinPercent) {
+	if (s.rcPercent < (strategyConfigs?.risk?.minRCPercent ?? cfg.rcMinPercent)) {
 		return MODES.DEFENSIVE;
 	}
 	if (s.maxDivergencePercent > cfg.divergenceMaxPercent) {
@@ -214,6 +247,12 @@ function _decide(s) {
 
 	// ─── No market data yet → stay defensive ────────────────
 	if (s.midPrice === null) {
+		return MODES.DEFENSIVE;
+	}
+
+	// ─── Thin book → defensive ──────────────────────────────
+	const thinThreshold = strategyConfigs?.defensivePause?.thinBookThreshold;
+	if (thinThreshold && s.totalBookDepth < thinThreshold) {
 		return MODES.DEFENSIVE;
 	}
 
@@ -231,6 +270,9 @@ function _decide(s) {
 	if (s.spreadPercent !== null && s.spreadPercent < 0.5 && s.tradeVelocity <= 1) {
 		return MODES.GRID_RANGE;
 	}
+
+	// ─── Bot exploitation (brain-disabled by default) ────────
+	// Not auto-triggered yet; reserved for manual/tuned activation.
 
 	// ─── Default → Market-Making ─────────────────────────────
 	return MODES.MARKET_MAKING;
@@ -270,6 +312,7 @@ function _buildSwitchReason(newMode, s) {
 			if (s.rcPercent < cfg.rcMinPercent) return `RC too low (${s.rcPercent}%)`;
 			if (s.maxDivergencePercent > cfg.divergenceMaxPercent) return `Divergence too high (${s.maxDivergencePercent}%)`;
 			if (s.midPrice === null) return 'No market data';
+			if (strategyConfigs?.defensivePause?.thinBookThreshold && s.totalBookDepth < strategyConfigs.defensivePause.thinBookThreshold) return `Book too thin (depth ${s.totalBookDepth})`;
 			return 'Safety override';
 		case MODES.AGGRESSIVE_SNIPING:
 			return `Imbalance ${s.imbalanceRatio}× (${s.imbalanceSide}), velocity ${s.tradeVelocity}`;
@@ -277,6 +320,8 @@ function _buildSwitchReason(newMode, s) {
 			return `Volatile mode + high velocity (${s.tradeVelocity})`;
 		case MODES.GRID_RANGE:
 			return `Tight spread (${s.spreadPercent?.toFixed(2)}%) + low velocity (${s.tradeVelocity})`;
+		case MODES.BOT_EXPLOITATION:
+			return `Bot exploitation — ${s.tradeVelocity} trades, pattern detected`;
 		case MODES.MARKET_MAKING:
 			return 'Default — normal conditions';
 		default:
@@ -339,6 +384,46 @@ async function _startStrategy(mode) {
 				getSteemDexBotData: cache.getSteemDexBotData,
 			});
 		}
+	} else if (mode === MODES.MEAN_REVERSION) {
+		if (!reversionModule) {
+			reversionModule = await import('../../strategies/mean-reversion/index.js');
+		}
+		if (!reversionModule.isMeanReversionRunning()) {
+			await reversionModule.startMeanReversion({
+				adapter,
+				logger: log,
+				config: strategyConfigs.meanReversion,
+				cacheKey,
+				updateStrategyStatus: cache.updateStrategyStatus,
+				getSteemDexBotData: cache.getSteemDexBotData,
+			});
+		}
+	} else if (mode === MODES.DEFENSIVE) {
+		if (!defensiveModule) {
+			defensiveModule = await import('../../strategies/defensive-pause/index.js');
+		}
+		if (!defensiveModule.isDefensivePauseRunning()) {
+			await defensiveModule.startDefensivePause({
+				logger: log,
+				config: strategyConfigs.defensivePause,
+				reason: lastSwitchReason,
+				updateStrategyStatus: cache.updateStrategyStatus,
+			});
+		}
+	} else if (mode === MODES.BOT_EXPLOITATION) {
+		if (!exploitModule) {
+			exploitModule = await import('../../strategies/bot-exploitation/index.js');
+		}
+		if (!exploitModule.isBotExploitationRunning()) {
+			await exploitModule.startBotExploitation({
+				adapter,
+				logger: log,
+				config: strategyConfigs.botExploitation,
+				cacheKey,
+				updateStrategyStatus: cache.updateStrategyStatus,
+				getSteemDexBotData: cache.getSteemDexBotData,
+			});
+		}
 	}
 }
 
@@ -356,6 +441,18 @@ async function _stopCurrentStrategy() {
 	// Stop grid
 	if (!gridModule) gridModule = await import('../../strategies/grid-range/index.js');
 	if (gridModule.isGridRangeRunning()) await gridModule.stopGridRange();
+
+	// Stop mean-reversion
+	if (!reversionModule) reversionModule = await import('../../strategies/mean-reversion/index.js');
+	if (reversionModule.isMeanReversionRunning()) await reversionModule.stopMeanReversion();
+
+	// Stop defensive
+	if (!defensiveModule) defensiveModule = await import('../../strategies/defensive-pause/index.js');
+	if (defensiveModule.isDefensivePauseRunning()) await defensiveModule.stopDefensivePause();
+
+	// Stop bot-exploitation
+	if (!exploitModule) exploitModule = await import('../../strategies/bot-exploitation/index.js');
+	if (exploitModule.isBotExploitationRunning()) await exploitModule.stopBotExploitation();
 }
 
 function _isCurrentStrategyRunning() {
@@ -367,6 +464,15 @@ function _isCurrentStrategyRunning() {
 	}
 	if (currentMode === MODES.GRID_RANGE) {
 		return gridModule?.isGridRangeRunning() ?? false;
+	}
+	if (currentMode === MODES.MEAN_REVERSION) {
+		return reversionModule?.isMeanReversionRunning() ?? false;
+	}
+	if (currentMode === MODES.DEFENSIVE) {
+		return defensiveModule?.isDefensivePauseRunning() ?? false;
+	}
+	if (currentMode === MODES.BOT_EXPLOITATION) {
+		return exploitModule?.isBotExploitationRunning() ?? false;
 	}
 	// Unavailable modes that fell back to MM
 	return mmModule?.isMarketMakingRunning() ?? false;
@@ -387,4 +493,36 @@ function _pushStatus() {
 			: null,
 		signals: lastSignals,
 	});
+}
+
+// ─── Internal: RC Warning Zone (D4) ─────────────────────────
+
+function _checkRCWarning(signals) {
+	const minRC = strategyConfigs?.risk?.minRCPercent ?? cfg.rcMinPercent;
+	const warnZone = minRC + 5;
+
+	if (signals.rcPercent < warnZone && signals.rcPercent >= minRC) {
+		if (!rcWarningLogged) {
+			rcWarningLogged = true;
+			log?.warn('RISK', `⚠️ RC approaching threshold — ${signals.rcPercent}% (switch at ${minRC}%)`, {
+				eventType: 'RC_WARNING', rcPercent: signals.rcPercent, threshold: minRC,
+			});
+		}
+	} else {
+		rcWarningLogged = false;
+	}
+}
+
+// ─── Internal: Rebalance Safety Net ──────────────────────────
+
+async function _checkRebalance() {
+	if (!strategyConfigs?.risk) return;
+	try {
+		if (!rebalanceModule) {
+			rebalanceModule = await import('../../core/risk/rebalance.js');
+		}
+		await rebalanceModule.checkAndRebalance();
+	} catch (err) {
+		log?.error('RISK', `Rebalance tick error: ${err.message}`, { error: err.message });
+	}
 }

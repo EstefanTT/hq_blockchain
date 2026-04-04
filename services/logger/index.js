@@ -72,6 +72,9 @@ const contextMap = {
 	BRAIN: "🧠",
 	SNIPE: "🎯",
 	GRID: "📐",
+	REVERT: "🔃",
+	PAUSE: "⏸️",
+	EXPLOIT: "🕵️",
 	// Default
 	DEFAULT: "📄",
 };

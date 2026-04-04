@@ -86,6 +86,27 @@ export const runtimeCache = {
 		logsSizeMB: null,
 		updatedAt: null,
 	},
+
+	// Risk status (Step 13)
+	riskStatus: {
+		slippageRejectCount: 0,
+		lastSlippageReject: null,
+		lastRebalanceTime: null,
+		lastRebalanceSide: null,
+		lastRebalanceAmount: null,
+		lastRebalancePrice: null,
+	},
+
+	// Bot-exploitation status (Step 13)
+	exploitationStatus: {
+		active: false,
+		cycleCount: 0,
+		phase: 'idle',
+		lastAction: null,
+	},
+
+	// Dry-run flag (Step 14)
+	dryRunEnabled: false,
 };
 
 // ─── Actions ─────────────────────────────────────────────────
@@ -141,6 +162,15 @@ export function updateBrainStatus(fields) {
 }
 export function updateAppSizeInfo(fields) {
 	Object.assign(runtimeCache.appSizeInfo, fields);
+}
+export function updateRiskStatus(fields) {
+	Object.assign(runtimeCache.riskStatus, fields);
+}
+export function updateExploitationStatus(fields) {
+	Object.assign(runtimeCache.exploitationStatus, fields);
+}
+export function setDryRunFlag(enabled) {
+	runtimeCache.dryRunEnabled = !!enabled;
 }
 
 // ─── Getters ─────────────────────────────────────────────────

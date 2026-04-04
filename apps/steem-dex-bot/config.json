@@ -1,6 +1,7 @@
 {
 	"name": "steem-dex-bot",
 	"enabled": true,
+	"dryRun": false,
 	"chainName": "steem",
 	"nodes": [
 		"https://api.steemit.com",
@@ -70,6 +71,36 @@
 		"lookbackMinutes": 30,
 		"minTradesForRange": 6,
 		"orderExpirationSec": 120
+	},
+	"meanReversion": {
+		"enabled": true,
+		"triggerMovePercent": 0.9,
+		"targetSnapbackPercent": 0.6,
+		"maxDurationSeconds": 90,
+		"baseSizeQuote": 2.0,
+		"lookbackMinutes": 30,
+		"orderExpirationSec": 120
+	},
+	"defensivePause": {
+		"enabled": true,
+		"thinBookThreshold": 500,
+		"minRCPercent": 25
+	},
+	"risk": {
+		"maxAllowedSlippagePercent": 0.3,
+		"minRCPercent": 25,
+		"rebalanceDeviationPercent": 1.0,
+		"rebalanceMaxPercent": 0.2,
+		"rebalanceLimitOffsetPercent": 0.05
+	},
+	"botExploitation": {
+		"enabled": true,
+		"baitDistancePercent": 0.015,
+		"pushSizeQuote": 10,
+		"maxCycles": 8,
+		"cycleCooldownMs": 5000,
+		"maxDurationSeconds": 120,
+		"orderExpirationSec": 30
 	},
 	"brain": {
 		"enabled": true,

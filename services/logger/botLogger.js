@@ -33,6 +33,9 @@ const BOT_CONTEXTS = {
 	BRAIN: '🧠',
 	SNIPE: '🎯',
 	GRID: '📐',
+	REVERT: '🔃',
+	PAUSE: '⏸️',
+	EXPLOIT: '🕵️',
 };
 
 // ─── Severity → level mapping ────────────────────────────────

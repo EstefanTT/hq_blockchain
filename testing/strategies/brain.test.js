@@ -68,12 +68,12 @@ function createMockCache(overrides = {}) {
 			'steem:STEEM/SBD': {
 				midPrice: 0.2000,
 				bids: [
-					{ price: 0.199, amount: 500 },
-					{ price: 0.198, amount: 300 },
+					{ price: 0.199, amount: 1500 },
+					{ price: 0.198, amount: 1000 },
 				],
 				asks: [
-					{ price: 0.201, amount: 500 },
-					{ price: 0.202, amount: 300 },
+					{ price: 0.201, amount: 1500 },
+					{ price: 0.202, amount: 1000 },
 				],
 				spreadPercent: 1.0,
 				timestamp: new Date().toISOString(),
@@ -155,7 +155,38 @@ const baseGridConfig = {
 	orderExpirationSec: 120,
 };
 
-const baseStrategyConfigs = { marketMaking: baseMmConfig, aggressiveSniping: baseSnipeConfig, gridRange: baseGridConfig };
+const baseReversionConfig = {
+	enabled: true,
+	triggerMovePercent: 0.9,
+	targetSnapbackPercent: 0.6,
+	maxDurationSeconds: 90,
+	baseSizeQuote: 2.0,
+	lookbackMinutes: 30,
+	orderExpirationSec: 120,
+};
+
+const baseDefensiveConfig = {
+	enabled: true,
+	thinBookThreshold: 500,
+	minRCPercent: 25,
+};
+
+const baseExploitConfig = {
+	enabled: true,
+	minProfitPercent: 0.3,
+	maxSizeQuote: 5.0,
+	cyclePauseMs: 99999999,
+	minCyclesBeforeEscalation: 3,
+	maxEscalationPercent: 0.5,
+	cooldownMs: 5000,
+};
+
+const baseRiskConfig = {
+	slippage: { maxSlippagePercent: 1.5, enabled: true },
+	rebalance: { enabled: true, interval: 60, threshold: 0.6 },
+};
+
+const baseStrategyConfigs = { marketMaking: baseMmConfig, aggressiveSniping: baseSnipeConfig, gridRange: baseGridConfig, meanReversion: baseReversionConfig, defensivePause: baseDefensiveConfig, botExploitation: baseExploitConfig, risk: baseRiskConfig };
 
 // ─── Tests ───────────────────────────────────────────────────
 
@@ -220,12 +251,10 @@ describe('Brain', async () => {
 			cache,
 		});
 
-		// Should decide defensive, but fall back to MM since defensive not available
-		assert.equal(mod.getCurrentMode(), 'market-making');
+		assert.equal(mod.getCurrentMode(), 'defensive');
 
 		const reason = mod.getLastSwitchReason();
 		assert.ok(reason.includes('RC too low'), `Reason should mention RC: ${reason}`);
-		assert.ok(reason.includes('fallback'), `Reason should mention fallback: ${reason}`);
 
 		await mod.stopBrain();
 	});
@@ -246,8 +275,7 @@ describe('Brain', async () => {
 			cache,
 		});
 
-		// Falls back to MM (defensive not available)
-		assert.equal(mod.getCurrentMode(), 'market-making');
+		assert.equal(mod.getCurrentMode(), 'defensive');
 
 		const reason = mod.getLastSwitchReason();
 		assert.ok(reason.includes('Divergence'), `Reason should mention divergence: ${reason}`);
@@ -255,7 +283,7 @@ describe('Brain', async () => {
 		await mod.stopBrain();
 	});
 
-	it('should fall back to MM for unavailable modes (mean-reversion)', async () => {
+	it('should switch to mean-reversion when volatile + high velocity', async () => {
 		// Volatile + high velocity → mean-reversion desired
 		const now = new Date();
 		const recentTrades = Array.from({ length: 8 }, (_, i) => ({
@@ -280,16 +308,11 @@ describe('Brain', async () => {
 			cache,
 		});
 
-		// Should desire mean-reversion but fall back to MM
-		assert.equal(mod.getCurrentMode(), 'market-making');
+		// Mean-reversion is now available — should be selected
+		assert.equal(mod.getCurrentMode(), 'mean-reversion');
 
 		const reason = mod.getLastSwitchReason();
 		assert.ok(reason.includes('Volatile') || reason.includes('velocity'), `Reason should mention volatile/velocity: ${reason}`);
-		assert.ok(reason.includes('fallback'), `Reason should mention fallback: ${reason}`);
-
-		// Should log the fallback
-		const fallbackLog = logger.logs.find(l => l.message.includes('not available yet'));
-		assert.ok(fallbackLog, 'Should log that mode is not available');
 
 		await mod.stopBrain();
 	});
@@ -364,8 +387,7 @@ describe('Brain', async () => {
 			cache,
 		});
 
-		// No midPrice → defensive → fallback to MM
-		assert.equal(mod.getCurrentMode(), 'market-making');
+		assert.equal(mod.getCurrentMode(), 'defensive');
 
 		const reason = mod.getLastSwitchReason();
 		assert.ok(reason.includes('No market data'), `Reason should mention no data: ${reason}`);
@@ -458,8 +480,8 @@ describe('Brain', async () => {
 			orderBooks: {
 				'steem:STEEM/SBD': {
 					midPrice: 0.2000,
-					bids: [{ price: 0.1998, amount: 500 }],
-					asks: [{ price: 0.2002, amount: 500 }],
+					bids: [{ price: 0.1998, amount: 1500 }],
+					asks: [{ price: 0.2002, amount: 1500 }],
 					spreadPercent: 0.2,
 					timestamp: new Date().toISOString(),
 				},
@@ -482,5 +504,77 @@ describe('Brain', async () => {
 		assert.ok(reason.includes('spread') || reason.includes('velocity'), `Reason should mention spread/velocity: ${reason}`);
 
 		await mod.stopBrain();
+	});
+
+	it('should switch to defensive when book is too thin', async () => {
+		cache = createMockCache({
+			orderBooks: {
+				'steem:STEEM/SBD': {
+					midPrice: 0.2000,
+					bids: [{ price: 0.199, amount: 5 }],     // tiny depth: ~1.0
+					asks: [{ price: 0.201, amount: 5 }],     // tiny depth: ~1.0
+					spreadPercent: 1.0,
+					timestamp: new Date().toISOString(),
+				},
+			},
+		});
+
+		await mod.startBrain({
+			adapter,
+			logger,
+			config: baseBrainConfig,
+			strategyConfigs: baseStrategyConfigs,
+			cacheKey: 'steem:STEEM/SBD',
+			cache,
+		});
+
+		assert.equal(mod.getCurrentMode(), 'defensive');
+
+		const reason = mod.getLastSwitchReason();
+		assert.ok(reason.includes('Book too thin'), `Reason should mention thin book: ${reason}`);
+
+		await mod.stopBrain();
+	});
+
+	it('forceMode should switch mode bypassing cooldown', async () => {
+		cache = createMockCache();
+
+		await mod.startBrain({
+			adapter,
+			logger,
+			config: { ...baseBrainConfig, cooldownMs: 999999 },
+			strategyConfigs: baseStrategyConfigs,
+			cacheKey: 'steem:STEEM/SBD',
+			cache,
+		});
+
+		assert.equal(mod.getCurrentMode(), 'market-making');
+
+		// Force switch to defensive — should work despite huge cooldown
+		await mod.forceMode('defensive');
+		assert.equal(mod.getCurrentMode(), 'defensive');
+
+		const reason = mod.getLastSwitchReason();
+		assert.ok(reason.includes('Manual override'), `Reason should mention override: ${reason}`);
+
+		// Force to grid-range — should also work
+		await mod.forceMode('grid-range');
+		assert.equal(mod.getCurrentMode(), 'grid-range');
+
+		// Forcing same mode again should be a no-op
+		await mod.forceMode('grid-range');
+		assert.equal(mod.getCurrentMode(), 'grid-range');
+
+		// Invalid mode should be a no-op
+		await mod.forceMode('nonexistent');
+		assert.equal(mod.getCurrentMode(), 'grid-range');
+
+		await mod.stopBrain();
+	});
+
+	it('forceMode should do nothing when brain is not running', async () => {
+		// No startBrain call
+		await mod.forceMode('defensive');
+		assert.equal(mod.getCurrentMode(), null);
 	});
 });

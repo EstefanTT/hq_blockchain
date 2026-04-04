@@ -15,5 +15,8 @@ export default function getSteemDexBotData(runtimeCache) {
 		strategyStatus: runtimeCache.strategyStatus,
 		brainStatus: runtimeCache.brainStatus,
 		appSizeInfo: runtimeCache.appSizeInfo,
+		riskStatus: runtimeCache.riskStatus,
+		exploitationStatus: runtimeCache.exploitationStatus,
+		dryRunEnabled: runtimeCache.dryRunEnabled,
 	};
 }

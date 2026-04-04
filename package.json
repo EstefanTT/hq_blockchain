@@ -6,7 +6,11 @@
 	"main": "index.js",
 	"scripts": {
 		"start": "node index.js",
-		"dev": "node --watch index.js"
+		"dev": "node --watch index.js",
+		"analyze": "node scripts/analysis/analyze-log.js",
+		"backtest": "node scripts/analysis/backtest.js",
+		"summary": "node scripts/analysis/dashboard-summary.js",
+		"test": "node --test testing/**/*.test.js"
 	},
 	"author": "Stef",
 	"license": "ISC",
