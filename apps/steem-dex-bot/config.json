@@ -24,10 +24,22 @@
 		"baseSizeQuote": 0.10,
 		"maxLevels": 4,
 		"levels": [
-			{ "distancePercent": 0.1, "sizeMultiplier": 1.0 },
-			{ "distancePercent": 0.3, "sizeMultiplier": 2.5 },
-			{ "distancePercent": 0.6, "sizeMultiplier": 5.0 },
-			{ "distancePercent": 1.0, "sizeMultiplier": 10.0 }
+			{
+				"distancePercent": 0.1,
+				"sizeMultiplier": 1.0
+			},
+			{
+				"distancePercent": 0.3,
+				"sizeMultiplier": 2.5
+			},
+			{
+				"distancePercent": 0.6,
+				"sizeMultiplier": 5.0
+			},
+			{
+				"distancePercent": 1.0,
+				"sizeMultiplier": 10.0
+			}
 		],
 		"refreshIntervalMs": 45000,
 		"midDriftThreshold": 0.0015,

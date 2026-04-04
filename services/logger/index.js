@@ -68,10 +68,10 @@ const contextMap = {
 	ALERT: "🚨",
 	STORAGE: "💾",
 	MICRO: "🔹",
-		MM: "📊",
-		BRAIN: "🧠",
-		SNIPE: "🎯",
-		GRID: "📐",
+	MM: "📊",
+	BRAIN: "🧠",
+	SNIPE: "🎯",
+	GRID: "📐",
 	// Default
 	DEFAULT: "📄",
 };

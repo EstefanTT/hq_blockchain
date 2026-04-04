@@ -9,11 +9,11 @@
 // ─── Constants ───────────────────────────────────────────────
 
 const MODES = {
-	MARKET_MAKING:      'market-making',
+	MARKET_MAKING: 'market-making',
 	AGGRESSIVE_SNIPING: 'aggressive-sniping',
-	GRID_RANGE:         'grid-range',
-	MEAN_REVERSION:     'mean-reversion',
-	DEFENSIVE:          'defensive',
+	GRID_RANGE: 'grid-range',
+	MEAN_REVERSION: 'mean-reversion',
+	DEFENSIVE: 'defensive',
 };
 
 const AVAILABLE_MODES = new Set([MODES.MARKET_MAKING, MODES.AGGRESSIVE_SNIPING, MODES.GRID_RANGE]);

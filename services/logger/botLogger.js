@@ -17,29 +17,29 @@ import path from 'path';
 // ─── Context emoji map (bot-domain only) ─────────────────────
 
 const BOT_CONTEXTS = {
-	BOT:      '🤖',
-	ORDER:    '📝',
-	TRADE:    '💰',
-	MODE:     '🔄',
-	ALERT:    '🚨',
-	PRICE:    '💲',
+	BOT: '🤖',
+	ORDER: '📝',
+	TRADE: '💰',
+	MODE: '🔄',
+	ALERT: '🚨',
+	PRICE: '💲',
 	SNAPSHOT: '📸',
-	RISK:     '🛡️',
-	CHAIN:    '⛓️',
-	WALLET:   '👛',
-	STORAGE:  '💾',
-	MICRO:    '🔹',
-	MM:       '📊',
-	BRAIN:    '🧠',
-	SNIPE:    '🎯',
-	GRID:     '📐',
+	RISK: '🛡️',
+	CHAIN: '⛓️',
+	WALLET: '👛',
+	STORAGE: '💾',
+	MICRO: '🔹',
+	MM: '📊',
+	BRAIN: '🧠',
+	SNIPE: '🎯',
+	GRID: '📐',
 };
 
 // ─── Severity → level mapping ────────────────────────────────
 
 const SEVERITY_CONSOLE = {
-	INFO:  'info',
-	WARN:  'warn',
+	INFO: 'info',
+	WARN: 'warn',
 	ERROR: 'error',
 	DEBUG: 'info',
 };
@@ -117,7 +117,7 @@ export function createBotLogger({ botName, chainName }) {
 		jsonlStream.write(JSON.stringify(record) + '\n');
 
 		// SQLite — fire-and-forget (lazy loaded)
-		getLogAnalysisEvent().then(fn => fn(record)).catch(() => {});
+		getLogAnalysisEvent().then(fn => fn(record)).catch(() => { });
 	}
 
 	// ─── Public API ──────────────────────────────────────────
