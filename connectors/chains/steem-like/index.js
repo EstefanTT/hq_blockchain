@@ -60,9 +60,9 @@ export function createSteemLikeAdapter(config) {
 		/**
 		 * Initialize order operations with account credentials.
 		 * Must be called before using place/cancel/balance/RC methods.
-		 * @param {{ account: string, activeKey: string }} creds
+		 * @param {{ account: string, activeKey: string, logger?: Object }} creds
 		 */
-		initOperations({ account, activeKey }) {
+		initOperations({ account, activeKey, logger }) {
 			ops = new SteemLikeOperations({
 				nodeUrl: nodes[0],
 				chainName,
@@ -70,6 +70,7 @@ export function createSteemLikeAdapter(config) {
 				activeKey,
 				baseSymbol: baseToken.symbol,
 				quoteSymbol: quoteToken.symbol,
+				logger,
 			});
 			console.info('CHAIN', chainName.toUpperCase(), `🔑 Operations initialized for @${account}`);
 		},

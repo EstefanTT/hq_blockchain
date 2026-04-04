@@ -4,9 +4,12 @@
 
 import auth from '../../middlewares/auth.js';
 import { getSteemDexBotData } from '../../../services/cache/index.js';
+import { getRecentAnalysisLogs } from '../../../services/storage/steemDexStore.js';
 
 function handler(_req, res) {
-	res.json(getSteemDexBotData());
+	const data = getSteemDexBotData();
+	data.recentBotLogs = getRecentAnalysisLogs('steem', 10);
+	res.json(data);
 }
 
 export default [auth, handler];

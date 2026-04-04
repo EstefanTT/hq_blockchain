@@ -81,5 +81,14 @@ export default async function startCrons() {
 		await cronJobs.riskChecks?.();
 	}, { timezone: 'UTC' });
 
+	// ── App/log size daily at 03:00 UTC ──
+	cron.schedule(cronStartsEvery.dayAt03h, async () => {
+		console.info('CRON', 'updateAppSize');
+		await cronJobs.updateAppSize?.();
+	}, { timezone: 'UTC' });
+
+	// Run once at startup too
+	await cronJobs.updateAppSize?.();
+
 	console.info('CRON', `Loaded ${Object.keys(cronJobs).length} cron jobs`);
 }

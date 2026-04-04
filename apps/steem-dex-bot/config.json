@@ -18,5 +18,54 @@
 	},
 	"maxOrderSizeBase": 0,
 	"maxOrderSizeQuote": 0,
-	"tinyPyramidBaseSizeQuote": 0
+	"tinyPyramidBaseSizeQuote": 0,
+	"microLayer": {
+		"enabled": true,
+		"baseSizeQuote": 0.10,
+		"maxLevels": 4,
+		"levels": [
+			{ "distancePercent": 0.1, "sizeMultiplier": 1.0 },
+			{ "distancePercent": 0.3, "sizeMultiplier": 2.5 },
+			{ "distancePercent": 0.6, "sizeMultiplier": 5.0 },
+			{ "distancePercent": 1.0, "sizeMultiplier": 10.0 }
+		],
+		"refreshIntervalMs": 45000,
+		"midDriftThreshold": 0.0015,
+		"orderExpirationSec": 120,
+		"maxTotalExposureQuote": 5.0
+	},
+	"marketMaking": {
+		"enabled": true,
+		"spreadPercent": 0.5,
+		"orderSizeQuote": 3.0,
+		"refreshIntervalMs": 40000,
+		"orderExpirationSec": 120,
+		"maxTotalExposureQuote": 10.0
+	},
+	"aggressiveSniping": {
+		"enabled": true,
+		"maxSizeQuote": 8.0,
+		"targetSlippagePercent": 0.4,
+		"maxDurationSeconds": 60,
+		"orderExpirationSec": 90
+	},
+	"gridRange": {
+		"enabled": true,
+		"minRangeWidthPercent": 1.2,
+		"baseSizeQuote": 0.5,
+		"maxLevels": 5,
+		"refreshSeconds": 75,
+		"lookbackMinutes": 30,
+		"minTradesForRange": 6,
+		"orderExpirationSec": 120
+	},
+	"brain": {
+		"enabled": true,
+		"tickIntervalMs": 6000,
+		"cooldownMs": 30000,
+		"rcMinPercent": 20,
+		"divergenceMaxPercent": 3.0,
+		"imbalanceRatioThreshold": 2.5,
+		"tradeVelocityWindow": 60
+	}
 }

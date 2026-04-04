@@ -60,11 +60,18 @@ const contextMap = {
 	// Strategies & Apps
 	STRAT: "🎯",
 	BOT: "🤖",
+	ORDER: "📝",
+	MODE: "🔄",
+	SNAPSHOT: "📸",
 	ANALYT: "🔬",
 	PRICE: "💲",
 	ALERT: "🚨",
 	STORAGE: "💾",
-
+	MICRO: "🔹",
+		MM: "📊",
+		BRAIN: "🧠",
+		SNIPE: "🎯",
+		GRID: "📐",
 	// Default
 	DEFAULT: "📄",
 };

@@ -11,5 +11,9 @@ export default function getSteemDexBotData(runtimeCache) {
 		recentTrades: runtimeCache.recentTrades,
 		storageStats: runtimeCache.storageStats,
 		accountData: runtimeCache.accountData,
+		microLayerStatus: runtimeCache.microLayerStatus,
+		strategyStatus: runtimeCache.strategyStatus,
+		brainStatus: runtimeCache.brainStatus,
+		appSizeInfo: runtimeCache.appSizeInfo,
 	};
 }

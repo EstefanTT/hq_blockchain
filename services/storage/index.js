@@ -15,4 +15,5 @@ export {
 	getTradeHistory,
 	getCurrentPosition,
 	countTradesToday,
+	getRecentAnalysisLogs,
 } from './steemDexStore.js';

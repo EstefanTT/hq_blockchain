@@ -32,8 +32,9 @@ export class SteemLikeOperations {
 	 * @param {string} opts.activeKey — WIF private key (active authority)
 	 * @param {string} opts.baseSymbol — e.g. 'STEEM'
 	 * @param {string} opts.quoteSymbol — e.g. 'SBD'
+	 * @param {Object} [opts.logger] — optional botLogger instance ({ info, warn, error })
 	 */
-	constructor({ nodeUrl, chainName, account, activeKey, baseSymbol, quoteSymbol }) {
+	constructor({ nodeUrl, chainName, account, activeKey, baseSymbol, quoteSymbol, logger }) {
 		if (!nodeUrl) throw new Error('nodeUrl required for operations');
 		if (!account) throw new Error('account required for operations');
 		if (!activeKey) throw new Error('activeKey (WIF) required for operations');
@@ -42,10 +43,17 @@ export class SteemLikeOperations {
 		this.account = account;
 		this.baseSymbol = baseSymbol || 'STEEM';
 		this.quoteSymbol = quoteSymbol || 'SBD';
+		this.log = logger || null;
 
 		this._client = new Client(nodeUrl);
 		this._key = PrivateKey.fromString(activeKey);
 		this._rcApi = new RCAPI(this._client);
+	}
+
+	/** Log via botLogger if available, else console.info */
+	_log(level, context, message, data) {
+		if (this.log) return this.log[level](context, message, data);
+		console[level](context, this.chainName.toUpperCase(), message);
 	}
 
 	// ─── Place Limit Order ──────────────────────────────────────
@@ -95,19 +103,22 @@ export class SteemLikeOperations {
 		}];
 
 		if (dryRun) {
-			console.info('TRADE', this.chainName.toUpperCase(),
-				`[DRY-RUN] ${side.toUpperCase()} ${amount} ${this.baseSymbol} @ ${price} ${this.quoteSymbol} (orderid: ${orderId})`);
+			this._log('info', 'ORDER',
+				`[DRY-RUN] ${side.toUpperCase()} ${amount} ${this.baseSymbol} @ ${price} ${this.quoteSymbol} (orderid: ${orderId})`,
+				{ side, price, amount, orderId, dryRun: true });
 			return { orderId, operation, dryRun: true };
 		}
 
-		console.info('TRADE', this.chainName.toUpperCase(),
-			`Placing ${side.toUpperCase()} ${amount} ${this.baseSymbol} @ ${price} ${this.quoteSymbol} (orderid: ${orderId})`);
+		this._log('info', 'ORDER',
+			`📝 Placing ${side.toUpperCase()} ${amount} ${this.baseSymbol} @ ${price} ${this.quoteSymbol} (orderid: ${orderId})`,
+			{ side, price, amount, orderId });
 
 		const result = await this._client.broadcast.sendOperations([operation], this._key);
 		const txId = result?.id || result?.txId || null;
 
-		console.info('TRADE', this.chainName.toUpperCase(),
-			`✅ Order placed — txId: ${txId}, orderId: ${orderId}`);
+		this._log('info', 'ORDER',
+			`✅ Order placed — txId: ${txId}, orderId: ${orderId}`,
+			{ side, price, amount, orderId, txId });
 
 		return { orderId, operation, txId, dryRun: false };
 	}
@@ -130,18 +141,20 @@ export class SteemLikeOperations {
 		}];
 
 		if (dryRun) {
-			console.info('TRADE', this.chainName.toUpperCase(),
-				`[DRY-RUN] Cancel order ${orderId}`);
+			this._log('info', 'ORDER',
+				`[DRY-RUN] Cancel order ${orderId}`,
+				{ orderId, dryRun: true });
 			return { orderId, operation, dryRun: true };
 		}
 
-		console.info('TRADE', this.chainName.toUpperCase(), `Cancelling order ${orderId}`);
+		this._log('info', 'ORDER', `❌ Cancelling order ${orderId}`, { orderId });
 
 		const result = await this._client.broadcast.sendOperations([operation], this._key);
 		const txId = result?.id || result?.txId || null;
 
-		console.info('TRADE', this.chainName.toUpperCase(),
-			`✅ Order cancelled — txId: ${txId}, orderId: ${orderId}`);
+		this._log('info', 'ORDER',
+			`✅ Order cancelled — txId: ${txId}, orderId: ${orderId}`,
+			{ orderId, txId });
 
 		return { orderId, operation, txId, dryRun: false };
 	}

@@ -13,7 +13,6 @@ import {
 	getSteemDexBotData,
 } from '../../services/cache/index.js';
 import { sendTelegramMessage } from '../../services/messaging/telegram.js';
-import { logAnalysisEvent } from '../../services/storage/steemDexStore.js';
 
 // ─── Intervals (ms) ─────────────────────────────────────────
 
@@ -41,6 +40,7 @@ export class PriceEngine {
 
 	constructor(config) {
 		this.config = config;
+		this.log = config.logger || null;
 		this.coinIds = [config.baseToken.coingeckoId, config.quoteToken.coingeckoId];
 		this.cmcSymbols = [config.baseToken.cmcSymbol, config.quoteToken.cmcSymbol];
 
@@ -63,6 +63,12 @@ export class PriceEngine {
 		this.prevPrices = {};   // { symbol: usd }
 	}
 
+	/** Route log calls through botLogger if available, else console. */
+	_l(level, context, message, data) {
+		if (this.log) this.log[level](context, message, data);
+		else console[level === 'warn' ? 'warn' : 'info'](context, message);
+	}
+
 	// ═════════════════════════════════════════════════════════
 	//  Lifecycle
 	// ═════════════════════════════════════════════════════════
@@ -70,7 +76,7 @@ export class PriceEngine {
 	async start() {
 		this.running = true;
 		updatePriceEngineStatus({ running: true, mode: 'normal' });
-		console.info('PRICE', `🔄 Starting engine — ${this.config.chainName} (${this.coinIds.join(', ')})`);
+		this._l('info', 'PRICE', `🔄 Starting engine — ${this.config.chainName} (${this.coinIds.join(', ')})`);
 
 		// One-time: load 30-day daily candle history
 		await this._fetchDailyHistory();
@@ -85,7 +91,7 @@ export class PriceEngine {
 		this._scheduleCgPrices();
 		this._scheduleCmcPrices();
 
-		console.info('PRICE', '✅ Price engine running');
+		this._l('info', 'PRICE', '✅ Price engine running');
 	}
 
 	async stop() {
@@ -93,13 +99,13 @@ export class PriceEngine {
 		for (const t of Object.values(this.timers)) clearTimeout(t);
 		this.timers = {};
 		updatePriceEngineStatus({ running: false });
-		console.info('PRICE', '🛑 Price engine stopped');
+		this._l('info', 'PRICE', '🛑 Price engine stopped');
 	}
 
 	/** One-off urgent refresh — callable from future strategies. */
 	async urgentRefresh() {
 		if (!this.running) return;
-		console.info('PRICE', '⚡ Urgent refresh requested');
+		this._l('info', 'PRICE', '⚡ Urgent refresh requested');
 		await Promise.allSettled([this._fetchCgPrices(), this._fetchCmcPrices()]);
 	}
 
@@ -114,9 +120,9 @@ export class PriceEngine {
 				if (!Array.isArray(raw)) continue;
 				const candles = raw.map(c => ({ t: c[0], o: c[1], h: c[2], l: c[3], c: c[4] }));
 				updateCandles(id, 'daily', candles.slice(-MAX_DAILY_DAYS));
-				console.info('PRICE', `📅 ${this.symByCgId[id]}: loaded ${candles.length} daily candles`);
+				this._l('info', 'PRICE', `📅 ${this.symByCgId[id]}: loaded ${candles.length} daily candles`, { coin: this.symByCgId[id], count: candles.length });
 			} catch (err) {
-				console.warn('PRICE', `Daily history failed (${id}): ${err.message}`);
+				this._l('warn', 'PRICE', `Daily history failed (${id}): ${err.message}`);
 			}
 		}
 	}
@@ -129,7 +135,7 @@ export class PriceEngine {
 				const candles = raw.map(c => ({ t: c[0], o: c[1], h: c[2], l: c[3], c: c[4] }));
 				this._mergeCandles(id, candles);
 			} catch (err) {
-				console.warn('PRICE', `Candle fetch failed (${id}): ${err.message}`);
+				this._l('warn', 'PRICE', `Candle fetch failed (${id}): ${err.message}`);
 			}
 		}
 		updatePriceEngineStatus({ lastCandleFetch: new Date().toISOString() });
@@ -149,7 +155,7 @@ export class PriceEngine {
 			updatePriceEngineStatus({ lastCgPriceFetch: new Date().toISOString() });
 			this._checkDivergence();
 		} catch (err) {
-			console.warn('PRICE', `CG price fetch failed: ${err.message}`);
+			this._l('warn', 'PRICE', `CG price fetch failed: ${err.message}`);
 		}
 	}
 
@@ -165,7 +171,7 @@ export class PriceEngine {
 			updatePriceEngineStatus({ lastCmcPriceFetch: new Date().toISOString() });
 			this._checkDivergence();
 		} catch (err) {
-			console.warn('PRICE', `CMC price fetch failed: ${err.message}`);
+			this._l('warn', 'PRICE', `CMC price fetch failed: ${err.message}`);
 		}
 	}
 
@@ -196,15 +202,7 @@ export class PriceEngine {
 		if (next === 'normal') this.lastVolatilityTrigger = null;
 
 		updatePriceEngineStatus({ mode: next, violentSince: this.violentSince });
-		console.warn('PRICE', `⚠️  Mode: ${prev} → ${next}`);
-
-		logAnalysisEvent({
-			chainName: this.config.chainName,
-			eventType: 'MODE_SWITCH',
-			severity: 'WARN',
-			message: `Price engine mode: ${prev} → ${next}`,
-			data: { prev, next, violentSince: this.violentSince },
-		});
+		this._l('warn', 'MODE', `⚠️  Mode: ${prev} → ${next}`, { prev, next, violentSince: this.violentSince });
 
 		// Reschedule price loops only — candles never change interval
 		this._scheduleCgPrices();
@@ -323,7 +321,7 @@ export class PriceEngine {
 		if (pct > VOLATILITY_THRESHOLD) {
 			this.lastVolatilityTrigger = Date.now();
 			if (this.mode !== 'violent') {
-				console.warn('PRICE', `🔥 Volatile move ${symbol}: ${(pct * 100).toFixed(2)}%`);
+				this._l('warn', 'PRICE', `🔥 Volatile move ${symbol}: ${(pct * 100).toFixed(2)}%`, { symbol, changePercent: +(pct * 100).toFixed(2) });
 				this._switchMode('violent');
 			}
 		} else {
@@ -334,7 +332,7 @@ export class PriceEngine {
 	_maybeCalm() {
 		if (this.mode !== 'violent' || !this.lastVolatilityTrigger) return;
 		if (Date.now() - this.lastVolatilityTrigger > VIOLENT_COOLDOWN_MS) {
-			console.info('PRICE', '😌 Markets calm — back to normal');
+			this._l('info', 'PRICE', '😌 Markets calm — back to normal');
 			this._switchMode('normal');
 		}
 	}
@@ -383,15 +381,7 @@ export class PriceEngine {
 			};
 
 			addDivergenceAlert(alert);
-			console.warn('ALERT', `🚨 Divergence ${sym}: ${alert.differencePercent}% gap`);
-
-			logAnalysisEvent({
-				chainName: this.config.chainName,
-				eventType: 'DIVERGENCE_ALERT',
-				severity: 'WARN',
-				message: `Price divergence ${sym}: ${alert.differencePercent}% gap`,
-				data: alert,
-			});
+			this._l('warn', 'ALERT', `🚨 Divergence ${sym}: ${alert.differencePercent}% gap`, alert);
 
 			const msg = `🚨 <b>PRICE DIVERGENCE — ${sym}</b>\n\n<code>${JSON.stringify(alert, null, 2)}</code>`;
 			sendTelegramMessage(chatId, msg).catch(() => { });

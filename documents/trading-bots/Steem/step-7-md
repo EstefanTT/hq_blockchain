@@ -1,0 +1,65 @@
+# Step 7 – First Sub-Strategy: Market-Making Mode (Depth ***)
+
+**Only implement Step 7 (Market-Making Mode).**  
+Do not touch any other sub-strategies yet. We will add the others one by one after this is verified.
+
+### Overall Goal of Step 7.1
+Add the **Market-Making Mode** as the first full sub-strategy.
+
+This is the default “chill” mode: place tight limit orders on both sides of the current mid-price to earn the spread, while staying perfectly balanced.
+
+The strategy must integrate cleanly with:
+- The permanent micro-layer (from Step 6)
+- The main brain (future Step 8)
+- The new botLogger (from Step 5)
+- The steem-like connector (from Step 2)
+
+### Exact Behaviour Required (Market-Making Mode)
+
+- Place **tight limit orders** on both sides of the current DEX mid-price:
+  - Bid: 0.4–0.6% below mid
+  - Ask: 0.4–0.6% above mid
+- Use small but reasonable size (configurable, default ~2–5 SBD worth per side)
+- When one side is filled → immediately replace it on the **same side** at the same distance to stay balanced
+- Refresh/cancel stale orders every 30–45 seconds
+- The mode is **active by default** when the bot starts (unless config disables it)
+- Respect the micro-layer: never cancel or interfere with the tiny inverted-pyramid orders
+
+### Integration & Control
+- Create `strategies/market-making/index.js` following the exact strategy contract:
+  - `init(config)`
+  - `tick(config)` (called periodically by the engine)
+  - `shutdown(config)`
+  - `describe()`
+- The main bot `index.js` must be able to start/stop this strategy via the engine/runner
+- Use `botLog()` for every placement, fill, and mode change (eventType: "MARKET_MAKING_PLACED", "MARKET_MAKING_FILLED", etc.)
+- Update the dashboard with a new **“Active Strategy”** section showing:
+  - Current mode name
+  - Number of active market-making orders
+  - Last fill time
+
+### Configuration (add to config.json)
+```json
+"marketMaking": {
+  "enabled": true,
+  "spreadPercent": 0.5,
+  "orderSizeQuote": 3.0,
+  "refreshSeconds": 40
+}
+Testing
+
+Add tests in testing/strategies/ to verify:
+Orders are placed at correct distances
+Filled orders are replaced correctly
+Strategy can be started/stopped safely
+
+Run the bot for a few minutes and confirm real market-making orders appear on the DEX (distinct from the micro-layer orders)
+
+Final Requirements
+
+Keep everything generic and multi-chain ready
+Respect architecture rules strictly (strategies only use connector API)
+Make the strategy clean, readable, and easy to extend for the other 4 modes later
+
+Important note
+If you have any important doubts, see a better way to structure the strategy, or have an improvement that seems important for the long-term (especially for the other 4 modes coming next), please ask first before coding anything. Do not start implementation until we confirm.

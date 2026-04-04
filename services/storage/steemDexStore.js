@@ -139,6 +139,12 @@ function stmts() {
 			WHERE chainName = @chainName AND baseToken = @baseToken AND quoteToken = @quoteToken
 			AND timestamp >= @todayStart
 		`),
+		selectRecentAnalysis: db.prepare(`
+			SELECT id, timestamp, chainName, eventType, severity, message, data, strategy
+			FROM analysis_log
+			WHERE chainName = @chainName
+			ORDER BY id DESC LIMIT @limit
+		`),
 	};
 
 	return _stmts;
@@ -299,6 +305,14 @@ export function getTradeHistory(chainName, baseToken, quoteToken, limit = 50) {
 export function getCurrentPosition(chainName, baseToken, quoteToken) {
 	ensureTables();
 	return stmts().selectPosition.get({ chainName, baseToken, quoteToken }) ?? null;
+}
+
+/**
+ * Get the N most recent analysis log entries for a chain.
+ */
+export function getRecentAnalysisLogs(chainName, limit = 10) {
+	ensureTables();
+	return stmts().selectRecentAnalysis.all({ chainName, limit });
 }
 
 /**

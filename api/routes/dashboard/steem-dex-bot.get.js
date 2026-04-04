@@ -139,9 +139,35 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 		<div id="open-orders" class="mt-3"></div>
 	</div>
 
+	<!-- Micro Layer Status (Step 6) -->
+	<div class="card mb-4">
+		<h2 class="text-base font-bold mb-3 text-gray-300">🔹 Micro Layer Status</h2>
+		<div id="micro-layer" class="text-gray-500 text-sm">Waiting for data…</div>
+	</div>
+
+	<!-- Active Strategy (Step 7) -->
+	<div class="card mb-4">
+		<h2 class="text-base font-bold mb-3 text-gray-300">📊 Active Strategy</h2>
+		<div id="strategy-status" class="text-gray-500 text-sm">Waiting for data…</div>
+	</div>
+
+	<!-- Brain Status (Step 8) -->
+	<div class="card mb-4">
+		<h2 class="text-base font-bold mb-3 text-gray-300">🧠 Brain Status</h2>
+		<div id="brain-status" class="text-gray-500 text-sm">Waiting for data…</div>
+	</div>
+
+	<!-- Recent Bot Logs (Step 5) -->
+	<div class="card mb-4">
+		<h2 class="text-base font-bold mb-3 text-gray-300">📋 Recent Bot Logs</h2>
+		<div id="bot-logs" class="text-gray-500 text-sm">Waiting for data…</div>
+		<div class="text-xs text-gray-600 mt-2">Full log: <code>logs/bot.log</code></div>
+	</div>
+
 	<!-- Footer -->
 	<p class="text-gray-600 text-xs mt-4 text-center">
 		Auto-refresh 10 s · <span id="last-update">—</span>
+		<span id="app-size" class="ml-3"></span>
 	</p>
 </div>
 
@@ -187,6 +213,11 @@ function render(d) {
 	renderAlerts(d.divergenceAlerts);
 	renderStorage(d.storageStats);
 	renderAccount(d.accountData);
+	renderMicroLayer(d.microLayerStatus);
+	renderStrategy(d.strategyStatus);
+	renderBrain(d.brainStatus);
+	renderBotLogs(d.recentBotLogs);
+	renderAppSize(d.appSizeInfo);
 }
 
 function renderEngine(e) {
@@ -331,6 +362,106 @@ function renderStorage(s) {
 }
 
 // ─── Helpers ────────────────────────────────────────────────
+function renderMicroLayer(ml) {
+	var el = document.getElementById('micro-layer');
+	if (!ml) { el.innerHTML = '<span class="text-gray-600">No micro layer data</span>'; return; }
+
+	var ac = ml.active ? 'text-green-400' : 'text-gray-500';
+	var total = (ml.buyOrders || 0) + (ml.sellOrders || 0);
+
+	el.innerHTML =
+		'<div class="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1">' +
+			'<div>Active: <span class="' + ac + '">' + (ml.active ? 'Yes ✅' : 'No ❌') + '</span></div>' +
+			'<div>Orders: <span class="text-white">' + total + '</span> <span class="text-gray-500">(' + (ml.buyOrders||0) + 'B / ' + (ml.sellOrders||0) + 'S)</span></div>' +
+			'<div>Locked: <span class="text-white">' + (ml.totalValueQuote ?? 0).toFixed(2) + ' SBD</span></div>' +
+			'<div>Last fill: ' + (ml.lastFillTime ? tAgo(ml.lastFillTime) : '<span class="text-gray-600">—</span>') + '</div>' +
+		'</div>' +
+		(ml.lastMidPrice ? '<div class="text-xs text-gray-500 mt-1">Grid mid: ' + ml.lastMidPrice.toFixed(4) + ' · Levels: ' + (ml.levelsConfigured || 0) + '</div>' : '');
+}
+
+function renderAppSize(info) {
+	var el = document.getElementById('app-size');
+	if (!info || !info.appSizeMB) { el.textContent = ''; return; }
+	el.textContent = 'App: ' + info.appSizeMB + ' MB | Logs: ' + (info.logsSizeMB || '?') + ' MB';
+}
+
+function renderStrategy(st) {
+	var el = document.getElementById('strategy-status');
+	if (!st || !st.name) { el.innerHTML = '<span class="text-gray-600">No active strategy</span>'; return; }
+
+	var ac = st.active ? 'text-green-400' : 'text-gray-500';
+	var total = (st.buyOrders || 0) + (st.sellOrders || 0);
+
+	el.innerHTML =
+		'<div class="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1">' +
+			'<div>Mode: <span class="text-white font-medium">' + esc(st.name).toUpperCase() + '</span></div>' +
+			'<div>Active: <span class="' + ac + '">' + (st.active ? 'Yes ✅' : 'No ❌') + '</span></div>' +
+			'<div>Orders: <span class="text-white">' + total + '</span> <span class="text-gray-500">(' + (st.buyOrders||0) + 'B / ' + (st.sellOrders||0) + 'S)</span></div>' +
+			'<div>Locked: <span class="text-white">' + (st.totalValueQuote ?? 0).toFixed(2) + ' SBD</span></div>' +
+		'</div>' +
+		(st.detail ? '<div class="text-xs text-yellow-400 mt-1">' + esc(st.detail) + '</div>' : '') +
+		'<div class="text-xs text-gray-500 mt-1">' +
+			'Last fill: ' + (st.lastFillTime ? tAgo(st.lastFillTime) : '<span class="text-gray-600">—</span>') +
+			(st.lastMidPrice ? ' · Mid: ' + st.lastMidPrice.toFixed(4) : '') +
+		'</div>';
+}
+
+function renderBrain(br) {
+	var el = document.getElementById('brain-status');
+	if (!br) { el.innerHTML = '<span class="text-gray-600">No brain data</span>'; return; }
+
+	var ac = br.active ? 'text-green-400' : 'text-gray-500';
+	var modeColors = {
+		'market-making': 'text-blue-400',
+		'aggressive-sniping': 'text-orange-400',
+		'grid-range': 'text-cyan-400',
+		'mean-reversion': 'text-purple-400',
+		'defensive': 'text-red-400',
+	};
+	var mc = modeColors[br.currentMode] || 'text-gray-400';
+
+	var sigHtml = '';
+	var s = br.signals || {};
+	if (s.midPrice != null) {
+		sigHtml = '<div class="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-0.5 text-xs text-gray-500 mt-2 border-t border-gray-700/50 pt-2">' +
+			'<div>Imbalance: <span class="text-white">' + (s.imbalanceRatio || 0) + '×</span> (' + (s.imbalanceSide || '-') + ')</div>' +
+			'<div>Velocity: <span class="text-white">' + (s.tradeVelocity ?? 0) + '</span> trades/' + (br.signals?.tradeVelocityWindow || 60) + 's</div>' +
+			'<div>Divergence: <span class="' + (s.maxDivergencePercent > 1.5 ? 'text-yellow-400' : 'text-white') + '">' + (s.maxDivergencePercent ?? 0) + '%</span></div>' +
+			'<div>RC: <span class="' + (s.rcPercent < 30 ? 'text-red-400' : 'text-green-400') + '">' + (s.rcPercent ?? 0) + '%</span></div>' +
+		'</div>';
+	}
+
+	el.innerHTML =
+		'<div class="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1">' +
+			'<div>Active: <span class="' + ac + '">' + (br.active ? 'Yes ✅' : 'No ❌') + '</span></div>' +
+			'<div>Mode: <span class="' + mc + ' font-medium">' + esc(br.currentMode || 'none').toUpperCase() + '</span></div>' +
+			'<div>Last switch: ' + (br.lastSwitchTime ? tAgo(br.lastSwitchTime) : '<span class="text-gray-600">—</span>') + '</div>' +
+			'<div>Next tick: ' + (br.nextTickTime ? tUntil(br.nextTickTime) : '<span class="text-gray-600">—</span>') + '</div>' +
+		'</div>' +
+		(br.lastSwitchReason ? '<div class="text-xs text-gray-400 mt-1">💬 ' + esc(br.lastSwitchReason) + '</div>' : '') +
+		sigHtml;
+}
+
+function renderBotLogs(logs) {
+	var el = document.getElementById('bot-logs');
+	if (!logs || !logs.length) { el.innerHTML = '<span class="text-gray-600">No logs yet</span>'; return; }
+
+	var sevColors = { INFO: 'text-blue-400', WARN: 'text-yellow-400', ERROR: 'text-red-400' };
+
+	el.innerHTML = logs.map(function(l) {
+		var ts = new Date(l.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+		var sev = l.severity || 'INFO';
+		var sc = sevColors[sev] || 'text-gray-400';
+		return '<div class="border-t border-gray-700/30 py-1 text-xs">' +
+			'<span class="text-gray-500">' + ts + '</span> ' +
+			'<span class="' + sc + ' font-medium">' + sev + '</span> ' +
+			'<span class="text-gray-400">[' + esc(l.eventType || '') + ']</span> ' +
+			'<span class="text-gray-200">' + esc(l.message || '') + '</span>' +
+			(l.strategy && l.strategy !== 'NONE' ? ' <span class="text-purple-400 ml-1">' + esc(l.strategy) + '</span>' : '') +
+		'</div>';
+	}).join('');
+}
+
 function renderAccount(ad) {
 	var el = document.getElementById('account-info');
 	var ordersEl = document.getElementById('open-orders');

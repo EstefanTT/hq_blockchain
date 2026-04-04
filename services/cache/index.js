@@ -47,6 +47,45 @@ export const runtimeCache = {
 		rc: null,             // { percentage, currentMana, maxMana }
 		lastRefresh: null,
 	},
+
+	// Micro layer (Step 6) — inverted-pyramid market-making status
+	microLayerStatus: {
+		active: false,
+		buyOrders: 0,
+		sellOrders: 0,
+		totalValueQuote: 0,
+		lastFillTime: null,
+		lastMidPrice: null,
+		levelsConfigured: 0,
+	},
+
+	// Active strategy status (Step 7)
+	strategyStatus: {
+		name: null,
+		active: false,
+		buyOrders: 0,
+		sellOrders: 0,
+		totalValueQuote: 0,
+		lastFillTime: null,
+		lastMidPrice: null,
+	},
+
+	// Brain status (Step 8)
+	brainStatus: {
+		currentMode: null,
+		active: false,
+		lastSwitchTime: null,
+		lastSwitchReason: null,
+		nextTickTime: null,
+		signals: {},
+	},
+
+	// App/log sizes (Step 6)
+	appSizeInfo: {
+		appSizeMB: null,
+		logsSizeMB: null,
+		updatedAt: null,
+	},
 };
 
 // ─── Actions ─────────────────────────────────────────────────
@@ -81,12 +120,27 @@ export function addRecentTrades(cacheKey, trades) {
 
 import _updateStorageStats from './actions/updateStorageStats.js';
 import _updateAccountData from './actions/updateAccountData.js';
+import _updateMicroLayerStatus from './actions/updateMicroLayerStatus.js';
+import _updateStrategyStatus from './actions/updateStrategyStatus.js';
+import _updateBrainStatus from './actions/updateBrainStatus.js';
 
 export function updateStorageStats(fields) {
 	return _updateStorageStats(runtimeCache, fields);
 }
 export function updateAccountData(fields) {
 	return _updateAccountData(runtimeCache, fields);
+}
+export function updateMicroLayerStatus(fields) {
+	return _updateMicroLayerStatus(runtimeCache, fields);
+}
+export function updateStrategyStatus(fields) {
+	return _updateStrategyStatus(runtimeCache, fields);
+}
+export function updateBrainStatus(fields) {
+	return _updateBrainStatus(runtimeCache, fields);
+}
+export function updateAppSizeInfo(fields) {
+	Object.assign(runtimeCache.appSizeInfo, fields);
 }
 
 // ─── Getters ─────────────────────────────────────────────────
