@@ -27,7 +27,7 @@ export function parseArgs() {
 
 const CHAIN_DEFAULTS = {
 	steem: { base: 'STEEM', quote: 'SBD' },
-	hive:  { base: 'HIVE',  quote: 'HBD' },
+	hive: { base: 'HIVE', quote: 'HBD' },
 	blurt: { base: 'BLURT', quote: 'BSD' },
 };
 
@@ -39,7 +39,7 @@ export function chainDefaults(args) {
 	const defaults = CHAIN_DEFAULTS[chain] || CHAIN_DEFAULTS.steem;
 	return {
 		chain,
-		base:  args.base  || defaults.base,
+		base: args.base || defaults.base,
 		quote: args.quote || defaults.quote,
 	};
 }

@@ -347,6 +347,37 @@ export function getAnalysisLogsByDateRange(chainName, since, until) {
 }
 
 /**
+ * Paginated analysis logs with optional filters.
+ * Cursor-based: pass beforeId (smallest id from previous page) for next page.
+ */
+export function getAnalysisLogsPaginated(chainName, { limit = 50, beforeId = null, eventType = null, severity = null, search = null } = {}) {
+	ensureTables();
+	const db = getDb();
+
+	let sql = `SELECT id, timestamp, chainName, eventType, severity, message, data, strategy
+	           FROM analysis_log WHERE chainName = @chainName`;
+	const params = { chainName, limit };
+
+	if (beforeId)  { sql += ` AND id < @beforeId`;  params.beforeId = beforeId; }
+	if (eventType) { sql += ` AND eventType = @eventType`; params.eventType = eventType; }
+	if (severity)  { sql += ` AND severity = @severity`;   params.severity = severity; }
+	if (search)    { sql += ` AND message LIKE @search`;   params.search = '%' + search + '%'; }
+
+	sql += ` ORDER BY id DESC LIMIT @limit`;
+	return db.prepare(sql).all(params);
+}
+
+/**
+ * Get distinct event types from analysis_log (for filter dropdown).
+ */
+export function getDistinctEventTypes(chainName) {
+	ensureTables();
+	const db = getDb();
+	return db.prepare(`SELECT DISTINCT eventType FROM analysis_log WHERE chainName = @chainName ORDER BY eventType`)
+		.all({ chainName }).map(r => r.eventType);
+}
+
+/**
  * Get order book snapshots for a chain+pair within a date range.
  */
 export function getSnapshotsByDateRange(chainName, baseToken, quoteToken, since, until) {

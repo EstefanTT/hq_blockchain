@@ -45,6 +45,7 @@ let defensiveModule = null;
 let exploitModule = null;
 let rebalanceModule = null;
 let rcWarningLogged = false;
+let isStrategyDisabledFn = null; // (mode) => bool — injected from bot
 
 // ─── Public API ──────────────────────────────────────────────
 
@@ -67,6 +68,7 @@ export async function startBrain(opts) {
 	strategyConfigs = opts.strategyConfigs;
 	cacheKey = opts.cacheKey;
 	cache = opts.cache;
+	isStrategyDisabledFn = opts.isStrategyDisabled || null;
 
 	running = true;
 	currentMode = null;
@@ -111,6 +113,13 @@ export async function stopBrain() {
 export function isBrainRunning() { return running; }
 export function getCurrentMode() { return currentMode; }
 export function getLastSwitchReason() { return lastSwitchReason; }
+
+/**
+ * Hot-reload strategy configs at runtime (e.g. after UI parameter change).
+ */
+export function updateStrategyConfigs(newConfigs) {
+	if (newConfigs) strategyConfigs = newConfigs;
+}
 
 /**
  * Force a specific mode (bypasses _decide for one tick).
@@ -256,18 +265,21 @@ function _decide(s) {
 		return MODES.DEFENSIVE;
 	}
 
+	// Helper: check if the strategy is disabled by the user
+	const _ok = (mode) => !isStrategyDisabledFn || !isStrategyDisabledFn(mode);
+
 	// ─── Strong one-sided pressure → Aggressive Sniping ─────
-	if (s.imbalanceRatio > cfg.imbalanceRatioThreshold && s.tradeVelocity >= 3) {
+	if (_ok(MODES.AGGRESSIVE_SNIPING) && s.imbalanceRatio > cfg.imbalanceRatioThreshold && s.tradeVelocity >= 3) {
 		return MODES.AGGRESSIVE_SNIPING;
 	}
 
 	// ─── Volatile with quick snap-back expected → Mean-Reversion
-	if (s.volatileMode && s.tradeVelocity >= 5) {
+	if (_ok(MODES.MEAN_REVERSION) && s.volatileMode && s.tradeVelocity >= 5) {
 		return MODES.MEAN_REVERSION;
 	}
 
 	// ─── Tight spread + low velocity → Grid/Range ───────────
-	if (s.spreadPercent !== null && s.spreadPercent < 0.5 && s.tradeVelocity <= 1) {
+	if (_ok(MODES.GRID_RANGE) && s.spreadPercent !== null && s.spreadPercent < 0.5 && s.tradeVelocity <= 1) {
 		return MODES.GRID_RANGE;
 	}
 
@@ -275,7 +287,10 @@ function _decide(s) {
 	// Not auto-triggered yet; reserved for manual/tuned activation.
 
 	// ─── Default → Market-Making ─────────────────────────────
-	return MODES.MARKET_MAKING;
+	if (_ok(MODES.MARKET_MAKING)) return MODES.MARKET_MAKING;
+
+	// All strategies disabled → defensive
+	return MODES.DEFENSIVE;
 }
 
 // ─── Internal: Mode Switching ────────────────────────────────

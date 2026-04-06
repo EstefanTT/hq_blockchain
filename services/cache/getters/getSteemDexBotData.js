@@ -18,5 +18,6 @@ export default function getSteemDexBotData(runtimeCache) {
 		riskStatus: runtimeCache.riskStatus,
 		exploitationStatus: runtimeCache.exploitationStatus,
 		dryRunEnabled: runtimeCache.dryRunEnabled,
+		botControl: runtimeCache.botControl,
 	};
 }

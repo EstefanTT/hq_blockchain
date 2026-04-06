@@ -107,6 +107,9 @@ export const runtimeCache = {
 
 	// Dry-run flag (Step 14)
 	dryRunEnabled: false,
+
+	// Bot control state (Dashboard improvement)
+	botControl: {},  // { 'steem-dex-bot': { enabled, dryRun, disabledStrategies } }
 };
 
 // ─── Actions ─────────────────────────────────────────────────
@@ -171,6 +174,12 @@ export function updateExploitationStatus(fields) {
 }
 export function setDryRunFlag(enabled) {
 	runtimeCache.dryRunEnabled = !!enabled;
+}
+export function updateBotControlState(botName, control) {
+	runtimeCache.botControl[botName] = { ...control };
+}
+export function getBotControlState(botName) {
+	return runtimeCache.botControl[botName] || null;
 }
 
 // ─── Getters ─────────────────────────────────────────────────

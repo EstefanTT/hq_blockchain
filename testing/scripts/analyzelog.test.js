@@ -11,13 +11,13 @@ import { describe, it } from 'node:test';
 describe('analyze-log strategy mapping', () => {
 
 	const STRATEGY_EVENT_MAP = {
-		'market-making':     new Set(['MM', 'ORDER', 'MICRO']),
-		'grid-range':        new Set(['GRID', 'ORDER']),
+		'market-making': new Set(['MM', 'ORDER', 'MICRO']),
+		'grid-range': new Set(['GRID', 'ORDER']),
 		'aggressive-sniping': new Set(['SNIPE', 'ORDER']),
-		'mean-reversion':    new Set(['REVERSION', 'ORDER']),
-		'bot-exploitation':  new Set(['EXPLOIT', 'ORDER']),
-		'brain':             new Set(['BRAIN', 'MODE']),
-		'risk':              new Set(['RISK']),
+		'mean-reversion': new Set(['REVERSION', 'ORDER']),
+		'bot-exploitation': new Set(['EXPLOIT', 'ORDER']),
+		'brain': new Set(['BRAIN', 'MODE']),
+		'risk': new Set(['RISK']),
 	};
 
 	it('should have 7 strategies defined', () => {

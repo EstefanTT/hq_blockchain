@@ -10,7 +10,9 @@
 		"analyze": "node scripts/analysis/analyze-log.js",
 		"backtest": "node scripts/analysis/backtest.js",
 		"summary": "node scripts/analysis/dashboard-summary.js",
-		"test": "node --test testing/**/*.test.js"
+		"test": "node --test testing/**/*.test.js",
+		"test:e2e": "npx playwright test",
+		"test:e2e:ui": "npx playwright test --ui"
 	},
 	"author": "Stef",
 	"license": "ISC",
@@ -22,5 +24,8 @@
 		"express": "^5.1.0",
 		"node-cron": "^4.2.1",
 		"zod": "^4.0.15"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.59.1"
 	}
 }

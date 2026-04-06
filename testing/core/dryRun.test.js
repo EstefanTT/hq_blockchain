@@ -80,7 +80,7 @@ describe('Dry-Run Wrapper', async () => {
 			placeLimitOrder: async (params) => { placed.push(params); return { orderId: 1 }; },
 			cancelOrder: async () => ({}),
 		};
-		const logger = { info: () => {} };
+		const logger = { info: () => { } };
 		const { wrappedPlace } = mod.createDryRunWrapper(adapter, logger);
 
 		// Start live

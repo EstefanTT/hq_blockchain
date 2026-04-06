@@ -8,3 +8,5 @@ data/snapshots/
 data/research/
 !data/**/.gitkeep
 !data/**/README.md
+test-results/
+playwright-report/

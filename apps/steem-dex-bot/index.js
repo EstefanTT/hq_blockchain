@@ -6,52 +6,78 @@
 // Aggressive sniping (Step 9). Grid/Range (Step 10). Mean-reversion (Step 11). Defensive/Pause (Step 12).
 // Risk & Rebalance Layer + Bot-Exploitation (Step 13).
 // Full Integration + Dry-Run Mode (Step 14).
+// Dashboard improvement: init() = data feeds only, startBot()/stopBot() = trading lifecycle.
 
 import { readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createBotLogger } from '../../services/logger/botLogger.js';
+import { registerStaticConfig, getEffectiveConfig, getBotControl, setBotControl, isStrategyDisabled } from '../../services/dynamicConfig/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const config = JSON.parse(readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
+const staticConfig = JSON.parse(readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
+const BOT_NAME = staticConfig.name;
 
 const SNAPSHOT_INTERVAL_MS = 30_000;     // 30s periodic order book snapshots
 const ACCOUNT_REFRESH_MS = 60_000;       // 60s periodic account data refresh
 
-const log = createBotLogger({ botName: config.name, chainName: config.chainName });
+const log = createBotLogger({ botName: BOT_NAME, chainName: staticConfig.chainName });
 
 let priceEngine = null;
 let chainAdapter = null;
 let snapshotTimer = null;
 let accountTimer = null;
+let tradingActive = false;          // true when brain + strategies are running
+let dataCollectionActive = false;   // true when price engine + chain poller are running
+let operationsReady = false;        // true when chain credentials are set up
+let initDone = false;               // true after init() completes (modules loaded)
 
+// Module-level references set by init(), used by startBot()/stopBot()
+let cacheKey = null;
+let cacheModule = null;
+
+// ####################################################################################################################################
+// ###########################################################   INIT   ###############################################################
+// ####################################################################################################################################
+
+/**
+ * Phase 1: Initialize modules (price engine, chain connector, snapshots).
+ * Sets up all components but only starts data collection if persisted flag says so.
+ * Does NOT start trading — call startBot() for that.
+ */
 export async function init() {
-	if (!config.enabled) {
+	if (!staticConfig.enabled) {
 		log.info('BOT', '⏸️  Disabled in config — skipping');
 		return;
 	}
 
-	log.info('BOT', '🚀 Initializing STEEM DEX Bot...', { nodes: config.nodes });
-	log.info('BOT', `Chain: ${config.chainName} | Base: ${config.baseToken.symbol} | Quote: ${config.quoteToken.symbol}`);
+	// Register with dynamic config system
+	registerStaticConfig(BOT_NAME, staticConfig);
 
-	// Initialize SQLite tables (lazy, but we want them ready at boot)
+	log.info('BOT', '🚀 Initializing STEEM DEX Bot...', { nodes: staticConfig.nodes });
+	log.info('BOT', `Chain: ${staticConfig.chainName} | Base: ${staticConfig.baseToken.symbol} | Quote: ${staticConfig.quoteToken.symbol}`);
+
+	const config = getEffectiveConfig(BOT_NAME);
+
+	// Initialize SQLite tables
 	const { saveOrderBookSnapshot, addTrades, getCurrentPosition, countTradesToday } = await import('../../services/storage/steemDexStore.js');
-	const { getLiveOrderBook, updateStorageStats, updateAccountData, updateMicroLayerStatus, updateStrategyStatus, updateBrainStatus, updateRiskStatus, setDryRunFlag, getSteemDexBotData } = await import('../../services/cache/index.js');
+	cacheModule = await import('../../services/cache/index.js');
+	const { getLiveOrderBook, updateStorageStats, updateBotControlState, getSteemDexBotData } = cacheModule;
 
 	const { chainName } = config;
 	const base = config.baseToken.symbol;
 	const quote = config.quoteToken.symbol;
-	const cacheKey = `${chainName}:${base}/${quote}`;
+	cacheKey = `${chainName}:${base}/${quote}`;
 
-	// Seed storage stats from DB (in case of restart)
+	// Push initial bot control state to cache
+	updateBotControlState(BOT_NAME, getBotControl(BOT_NAME));
+
+	// Seed storage stats from DB
 	const pos = getCurrentPosition(chainName, base, quote);
 	const tradesToday = countTradesToday(chainName, base, quote);
-	updateStorageStats({
-		tradesToday,
-		currentPosition: pos,
-	});
+	updateStorageStats({ tradesToday, currentPosition: pos });
 
-	// Start the price engine (external feeds)
+	// Create the price engine (but don't start yet)
 	const { PriceEngine } = await import('../../core/market/priceEngine.js');
 	priceEngine = new PriceEngine({
 		chainName: config.chainName,
@@ -59,9 +85,8 @@ export async function init() {
 		quoteToken: config.quoteToken,
 		logger: log,
 	});
-	await priceEngine.start();
 
-	// Start the chain connector (DEX order book + trades)
+	// Create the chain connector (but don't start yet)
 	const { createSteemLikeAdapter } = await import('../../connectors/chains/steem-like/index.js');
 	chainAdapter = createSteemLikeAdapter({
 		chainName: config.chainName,
@@ -70,7 +95,7 @@ export async function init() {
 		quoteToken: config.quoteToken,
 	});
 
-	// Subscribe to new trades → persist to SQLite + notify strategies
+	// Subscribe to trades → persist + notify strategies (only fires when data collection is active)
 	const { onTradeEvent } = await import('../../strategies/market-making/microLayer.js');
 	const { onMMTradeEvent } = await import('../../strategies/market-making/index.js');
 	const { onSnipeTradeEvent } = await import('../../strategies/aggressive-sniping/index.js');
@@ -92,10 +117,9 @@ export async function init() {
 		onMeanReversionTradeEvent(trade);
 		onDefensiveTradeEvent(trade);
 		onBotExploitTradeEvent(trade);
-		onRebalanceTradeEvent(trade);
+		// Only run rebalance if trading is active
+		if (tradingActive) onRebalanceTradeEvent(trade);
 	});
-
-	await chainAdapter.start();
 
 	// ─── Initialize order operations (Step 4) ────────────────────
 	const steemAccount = process.env.STEEM_ACCOUNT;
@@ -104,23 +128,23 @@ export async function init() {
 	if (steemAccount && steemActiveKey) {
 		chainAdapter.initOperations({ account: steemAccount, activeKey: steemActiveKey, logger: log });
 
-		// ─── Install dry-run wrapper on adapter (Step 14) ─────────────
+		// Install dry-run wrapper
 		const { createDryRunWrapper, setDryRun } = await import('../../core/execution/dryRun.js');
 		setDryRun(config.dryRun ?? false);
-		setDryRunFlag(config.dryRun ?? false);
+		cacheModule.setDryRunFlag(config.dryRun ?? false);
 		const { wrappedPlace, wrappedCancel } = createDryRunWrapper(chainAdapter, log);
 		chainAdapter.placeLimitOrder = wrappedPlace;
 		chainAdapter.cancelOrder = wrappedCancel;
 		if (config.dryRun) log.info('BOT', '🧪 DRY-RUN mode active — no real orders will be broadcast');
 
-		// ─── Install slippage guard on adapter (Step 13) ────────────────
+		// Install slippage guard
 		if (config.risk) {
 			const { createSlippageGuard } = await import('../../core/risk/slippageCheck.js');
-			chainAdapter.placeLimitOrder = createSlippageGuard(chainAdapter, config.risk, log, updateRiskStatus);
+			chainAdapter.placeLimitOrder = createSlippageGuard(chainAdapter, config.risk, log, cacheModule.updateRiskStatus);
 			log.info('RISK', '🛡️ Slippage guard installed', { maxSlippage: `${config.risk.maxAllowedSlippagePercent}%` });
 		}
 
-		// ─── Initialize rebalance safety net (Step 13) ─────────────────
+		// Initialize rebalance safety net
 		if (config.risk) {
 			const { initRebalance } = await import('../../core/risk/rebalance.js');
 			initRebalance({
@@ -129,76 +153,89 @@ export async function init() {
 				config: config.risk,
 				cacheKey,
 				getSteemDexBotData,
-				updateRiskStatus,
+				updateRiskStatus: cacheModule.updateRiskStatus,
 			});
 		}
 
-		// Helper: refresh account data and push to cache
-		async function refreshAccountData() {
-			try {
-				const [balances, openOrders, rc] = await Promise.all([
-					chainAdapter.getAccountBalances(),
-					chainAdapter.getOpenOrders(),
-					chainAdapter.getAccountRC(),
-				]);
-				updateAccountData({
-					account: balances.account,
-					balance: balances.balance,
-					quoteBalance: balances.quoteBalance,
-					vestingShares: balances.vestingShares,
-					openOrders,
-					rc,
-					lastRefresh: new Date().toISOString(),
-				});
-			} catch (err) {
-				log.warn('WALLET', `Account refresh failed: ${err.message}`, { error: err.message });
-			}
-		}
-
-		// Initial fetch + periodic refresh
-		await refreshAccountData();
-		accountTimer = setInterval(refreshAccountData, ACCOUNT_REFRESH_MS);
-
-		// ─── Start micro layer (Step 6) ─────────────────────────────
-		if (config.microLayer?.enabled) {
-			const { startMicroLayer } = await import('../../strategies/market-making/microLayer.js');
-			await startMicroLayer({
-				adapter: chainAdapter,
-				logger: log,
-				config: config.microLayer,
-				updateMicroLayerStatus,
-			});
-		}
-
-		// ─── Start market-making strategy (Step 7) — now managed by brain ─
-		// (Brain starts MM on its first tick — no direct start here)
-
-		// ─── Start brain (Step 8) ────────────────────────────────────
-		if (config.brain?.enabled) {
-			const { startBrain } = await import('../../strategies/engine/brain.js');
-			await startBrain({
-				adapter: chainAdapter,
-				logger: log,
-				config: config.brain,
-				strategyConfigs: { marketMaking: config.marketMaking, aggressiveSniping: config.aggressiveSniping, gridRange: config.gridRange, meanReversion: config.meanReversion, defensivePause: config.defensivePause, botExploitation: config.botExploitation, risk: config.risk },
-				cacheKey: cacheKey,
-				cache: { getSteemDexBotData, updateBrainStatus, updateStrategyStatus },
-			});
-		} else if (config.marketMaking?.enabled) {
-			// Fallback: no brain → start MM directly (backward compat)
-			const { startMarketMaking } = await import('../../strategies/market-making/index.js');
-			await startMarketMaking({
-				adapter: chainAdapter,
-				logger: log,
-				config: config.marketMaking,
-				updateStrategyStatus,
-			});
-		}
+		operationsReady = true;
 	} else {
 		log.warn('WALLET', '⚠️  STEEM_ACCOUNT / STEEM_ACTIVE_KEY not set — operations disabled');
 	}
 
-	// Periodic order book snapshots (every 30s)
+	initDone = true;
+
+	// Auto-start data collection if persisted flag says so
+	const control = getBotControl(BOT_NAME);
+	if (control.dataCollection) {
+		await startDataCollection();
+	}
+
+	log.info('BOT', `✅ STEEM DEX Bot initialized (data: ${dataCollectionActive ? 'ON' : 'OFF'}, trading: OFF)`);
+}
+
+// ####################################################################################################################################
+// ####################################################   DATA COLLECTION   ###########################################################
+// ####################################################################################################################################
+
+/** Account refresh helper — fetches balances, open orders, RC from chain. */
+async function refreshAccountData() {
+	try {
+		const [balances, openOrders, rc] = await Promise.all([
+			chainAdapter.getAccountBalances(),
+			chainAdapter.getOpenOrders(),
+			chainAdapter.getAccountRC(),
+		]);
+		cacheModule.updateAccountData({
+			account: balances.account,
+			balance: balances.balance,
+			quoteBalance: balances.quoteBalance,
+			vestingShares: balances.vestingShares,
+			openOrders,
+			rc,
+			lastRefresh: new Date().toISOString(),
+		});
+	} catch (err) {
+		log.warn('WALLET', `Account refresh failed: ${err.message}`, { error: err.message });
+	}
+}
+
+/**
+ * Start data collection: price engine, chain poller, snapshots, account refresh.
+ * Called when user toggles Data ON. Also auto-called when Bot is turned ON.
+ */
+export async function startDataCollection() {
+	if (dataCollectionActive) return;
+	if (!initDone) {
+		log.warn('BOT', '⚠️ Cannot start data collection — init not complete');
+		return;
+	}
+
+	dataCollectionActive = true;
+	setBotControl(BOT_NAME, { dataCollection: true });
+	cacheModule.updateBotControlState(BOT_NAME, getBotControl(BOT_NAME));
+
+	log.info('BOT', '📡 Starting data collection...');
+
+	// Start price engine
+	await priceEngine.start();
+
+	// Start chain poller
+	await chainAdapter.start();
+
+	// Start account refresh timer
+	if (operationsReady) {
+		await refreshAccountData();
+		accountTimer = setInterval(refreshAccountData, ACCOUNT_REFRESH_MS);
+	}
+
+	// Start periodic order book snapshots
+	const { saveOrderBookSnapshot } = await import('../../services/storage/steemDexStore.js');
+	const { getLiveOrderBook, updateStorageStats, getSteemDexBotData } = cacheModule;
+	const config = getEffectiveConfig(BOT_NAME);
+	const { chainName } = config;
+	const base = config.baseToken.symbol;
+	const quote = config.quoteToken.symbol;
+
 	snapshotTimer = setInterval(() => {
 		const book = getLiveOrderBook(cacheKey);
 		if (!book?.bids?.length) return;
@@ -215,17 +252,128 @@ export async function init() {
 			{ midPrice: book.midPrice, spreadPercent: book.spreadPercent, bidsCount: book.bids.length, asksCount: book.asks.length });
 	}, SNAPSHOT_INTERVAL_MS);
 
-	// Log bot start
-	log.info('BOT', `✅ STEEM DEX Bot ready 🟢 (${config.nodes.length} nodes)`, { nodes: config.nodes, base, quote });
+	log.info('BOT', '📡 Data collection active 🟢');
 }
 
 /**
- * Emergency stop — halt all trading but keep dashboard feeds alive.
- * Stops brain, all strategies, micro-layer, cancels open orders.
- * Does NOT stop price engine, chain polling, or snapshot timers.
+ * Stop data collection: price engine, chain poller, snapshots, account refresh.
+ * Also stops trading if it was active.
  */
-export async function emergencyStop() {
-	log.warn('BOT', '🚨 Emergency stop triggered — halting all trading');
+export async function stopDataCollection() {
+	if (!dataCollectionActive) return;
+
+	// Must stop trading first — can't trade without data
+	if (tradingActive) {
+		await stopBot();
+	}
+
+	dataCollectionActive = false;
+	setBotControl(BOT_NAME, { dataCollection: false });
+	cacheModule.updateBotControlState(BOT_NAME, getBotControl(BOT_NAME));
+
+	log.warn('BOT', '📡 Stopping data collection...');
+
+	if (snapshotTimer) { clearInterval(snapshotTimer); snapshotTimer = null; }
+	if (accountTimer) { clearInterval(accountTimer); accountTimer = null; }
+	if (chainAdapter) await chainAdapter.stop();
+	if (priceEngine) await priceEngine.stop();
+
+	log.warn('BOT', '📡 Data collection stopped 🔴');
+}
+
+// ####################################################################################################################################
+// ########################################################   START BOT   #############################################################
+// ####################################################################################################################################
+
+/**
+ * Phase 2: Start trading (brain + micro layer + all enabled strategies).
+ * Called when user toggles the bot ON from the dashboard.
+ */
+export async function startBot() {
+	if (tradingActive) return;
+	if (!operationsReady) {
+		log.warn('BOT', '⚠️ Cannot start bot — operations not ready (no credentials)');
+		return;
+	}
+
+	// Auto-enable data collection if not active
+	if (!dataCollectionActive) {
+		await startDataCollection();
+	}
+
+	const config = getEffectiveConfig(BOT_NAME);
+	tradingActive = true;
+
+	// Enable all strategies (clear disabled list) when turning ON
+	setBotControl(BOT_NAME, { enabled: true, disabledStrategies: [] });
+	cacheModule.updateBotControlState(BOT_NAME, getBotControl(BOT_NAME));
+
+	// Deactivate kill switch if it was active
+	const { deactivate } = await import('../../core/risk/killSwitch.js');
+	deactivate();
+
+	log.info('BOT', '🟢 Starting trading...');
+
+	// Start micro layer
+	if (config.microLayer?.enabled) {
+		const { startMicroLayer, isMicroLayerRunning } = await import('../../strategies/market-making/microLayer.js');
+		if (!isMicroLayerRunning()) {
+			await startMicroLayer({
+				adapter: chainAdapter,
+				logger: log,
+				config: config.microLayer,
+				updateMicroLayerStatus: cacheModule.updateMicroLayerStatus,
+			});
+		}
+	}
+
+	// Start brain
+	if (config.brain?.enabled) {
+		const { startBrain, isBrainRunning } = await import('../../strategies/engine/brain.js');
+		if (!isBrainRunning()) {
+			await startBrain({
+				adapter: chainAdapter,
+				logger: log,
+				config: config.brain,
+				strategyConfigs: {
+					marketMaking: config.marketMaking,
+					aggressiveSniping: config.aggressiveSniping,
+					gridRange: config.gridRange,
+					meanReversion: config.meanReversion,
+					defensivePause: config.defensivePause,
+					botExploitation: config.botExploitation,
+					risk: config.risk,
+				},
+				cacheKey,
+				cache: {
+					getSteemDexBotData: cacheModule.getSteemDexBotData,
+					updateBrainStatus: cacheModule.updateBrainStatus,
+					updateStrategyStatus: cacheModule.updateStrategyStatus,
+				},
+				isStrategyDisabled: (mode) => isStrategyDisabled(BOT_NAME, mode),
+			});
+		}
+	}
+
+	log.info('BOT', '✅ Trading active 🟢');
+}
+
+// ####################################################################################################################################
+// ########################################################   STOP BOT   ##############################################################
+// ####################################################################################################################################
+
+/**
+ * Stop trading cleanly: stop brain, all strategies, micro layer, cancel open orders.
+ * Data feeds (price engine, chain polling, snapshots) stay alive.
+ */
+export async function stopBot() {
+	if (!tradingActive) return;
+	tradingActive = false;
+
+	setBotControl(BOT_NAME, { enabled: false });
+	cacheModule.updateBotControlState(BOT_NAME, getBotControl(BOT_NAME));
+
+	log.warn('BOT', '🔴 Stopping trading...');
 
 	const { stopBrain, isBrainRunning } = await import('../../strategies/engine/brain.js');
 	if (isBrainRunning()) await stopBrain();
@@ -253,31 +401,64 @@ export async function emergencyStop() {
 		} catch { /* non-critical */ }
 	}
 
-	log.warn('BOT', '🛑 Emergency stop complete — dashboard feeds still active');
+	log.warn('BOT', '🔴 Trading stopped — dashboard feeds still active');
 }
+
+// ####################################################################################################################################
+// #####################################################   EMERGENCY STOP   ###########################################################
+// ####################################################################################################################################
+
+/**
+ * Emergency stop — halt all trading + activate kill switch.
+ */
+export async function emergencyStop() {
+	log.warn('BOT', '🚨 Emergency stop triggered — halting all trading');
+
+	const { activate } = await import('../../core/risk/killSwitch.js');
+	activate('Manual emergency stop from dashboard');
+
+	await stopBot();
+
+	log.warn('BOT', '🛑 Emergency stop complete — kill switch activated');
+}
+
+// ####################################################################################################################################
+// ########################################################   HELPERS   ###############################################################
+// ####################################################################################################################################
+
+/**
+ * Reload effective config and push updated strategy configs to brain.
+ */
+export async function reloadConfig() {
+	const config = getEffectiveConfig(BOT_NAME);
+	const { updateStrategyConfigs, isBrainRunning } = await import('../../strategies/engine/brain.js');
+	if (isBrainRunning()) {
+		updateStrategyConfigs({
+			marketMaking: config.marketMaking,
+			aggressiveSniping: config.aggressiveSniping,
+			gridRange: config.gridRange,
+			meanReversion: config.meanReversion,
+			defensivePause: config.defensivePause,
+			botExploitation: config.botExploitation,
+			risk: config.risk,
+		});
+	}
+
+	// Sync dry-run flag
+	const { setDryRun } = await import('../../core/execution/dryRun.js');
+	const control = getBotControl(BOT_NAME);
+	setDryRun(control.dryRun ?? config.dryRun ?? false);
+	cacheModule?.setDryRunFlag(control.dryRun ?? config.dryRun ?? false);
+}
+
+export function isTradingActive() { return tradingActive; }
+export function isDataCollectionActive() { return dataCollectionActive; }
+export function getConfig() { return getEffectiveConfig(BOT_NAME); }
+export function getBotName() { return BOT_NAME; }
 
 export async function shutdown() {
 	log.info('BOT', '🛑 Shutting down...');
-	const { stopBrain, isBrainRunning } = await import('../../strategies/engine/brain.js');
-	if (isBrainRunning()) await stopBrain();
-	const { stopMarketMaking, isMarketMakingRunning } = await import('../../strategies/market-making/index.js');
-	if (isMarketMakingRunning()) await stopMarketMaking();
-	const { stopAggressiveSniping, isAggressiveSnipingRunning } = await import('../../strategies/aggressive-sniping/index.js');
-	if (isAggressiveSnipingRunning()) await stopAggressiveSniping();
-	const { stopGridRange, isGridRangeRunning } = await import('../../strategies/grid-range/index.js');
-	if (isGridRangeRunning()) await stopGridRange();
-	const { stopMeanReversion, isMeanReversionRunning } = await import('../../strategies/mean-reversion/index.js');
-	if (isMeanReversionRunning()) await stopMeanReversion();
-	const { stopDefensivePause, isDefensivePauseRunning } = await import('../../strategies/defensive-pause/index.js');
-	if (isDefensivePauseRunning()) await stopDefensivePause();
-	const { stopBotExploitation, isBotExploitationRunning } = await import('../../strategies/bot-exploitation/index.js');
-	if (isBotExploitationRunning()) await stopBotExploitation();
-	const { stopMicroLayer } = await import('../../strategies/market-making/microLayer.js');
-	await stopMicroLayer();
-	if (snapshotTimer) clearInterval(snapshotTimer);
-	if (accountTimer) clearInterval(accountTimer);
-	if (chainAdapter) await chainAdapter.stop();
-	if (priceEngine) await priceEngine.stop();
-
+	await stopBot();
+	await stopDataCollection();
 	log.info('BOT', '✅ Shutdown complete');
 }

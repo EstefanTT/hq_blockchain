@@ -249,11 +249,11 @@ function realTradesInWindow(trades, fromIso, toIso) {
 }
 
 const STRATEGIES = {
-	'market-making':      simMarketMaking,
+	'market-making': simMarketMaking,
 	'aggressive-sniping': simAggressiveSniping,
-	'grid-range':         simGridRange,
-	'mean-reversion':     simMeanReversion,
-	'defensive':          simDefensive,
+	'grid-range': simGridRange,
+	'mean-reversion': simMeanReversion,
+	'defensive': simDefensive,
 };
 
 // ####################################################################################################################################
@@ -264,86 +264,86 @@ const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === proce
 
 if (isMainModule) {
 
-const args = parseArgs();
-const { chain, base, quote } = chainDefaults(args);
-const { since, until } = isoRange(args);
+	const args = parseArgs();
+	const { chain, base, quote } = chainDefaults(args);
+	const { since, until } = isoRange(args);
 
-const strategyName = args.strategy;
-if (!strategyName || !STRATEGIES[strategyName]) {
-	console.error(`❌ --strategy is required. Valid: ${Object.keys(STRATEGIES).join(', ')}`);
-	process.exit(1);
-}
-
-console.log('');
-console.log('╔══════════════════════════════════════════════════════════╗');
-console.log('║       🔬  BACKTEST ENGINE                               ║');
-console.log('╚══════════════════════════════════════════════════════════╝');
-console.log(`  Strategy: ${strategyName}`);
-console.log(`  Chain: ${chain}  |  Pair: ${base}/${quote}`);
-console.log(`  Range: ${since.slice(0, 10)} → ${until.slice(0, 10)}`);
-console.log('');
-
-// ─── Load data ──────────────────────────────────────────────
-
-const snapshots = getSnapshotsByDateRange(chain, base, quote, since, until);
-const realTrades = getTradesByDateRange(chain, base, quote, since, until);
-
-console.log(`  📸 Snapshots loaded: ${snapshots.length}`);
-console.log(`  🔄 Real trades loaded: ${realTrades.length}`);
-
-if (!snapshots.length) {
-	console.log('\n  ⚠️  No snapshots found — cannot backtest without order book history.\n');
-	process.exit(0);
-}
-
-// ─── Run simulation ─────────────────────────────────────────
-
-const engine = new BacktestEngine();
-const simFn = STRATEGIES[strategyName];
-simFn(engine, snapshots, realTrades);
-
-const lastMid = snapshots[snapshots.length - 1].midPrice || 0.20;
-const s = engine.stats(lastMid);
-
-console.log('');
-console.log('📊 Backtest Results');
-console.log('═'.repeat(50));
-console.log(`  Strategy:       ${strategyName}`);
-console.log(`  Total trades:   ${s.totalTrades} (${s.buys} buys, ${s.sells} sells)`);
-console.log(`  Initial equity: ${engine.initialEquity.toFixed(4)} ${quote}`);
-console.log(`  Final equity:   ${s.finalEquity} ${quote}`);
-console.log(`  P&L:            ${s.pnl >= 0 ? '🟢' : '🔴'} ${s.pnl} ${quote} (${s.pnlPercent}%)`);
-console.log(`  Max drawdown:   ${s.maxDrawdown}%`);
-console.log(`  Win rate:       ${s.winRate}%`);
-console.log(`  Avg buy price:  ${s.avgBuyPrice}`);
-console.log(`  Last mid price: ${lastMid.toFixed(6)}`);
-console.log('');
-
-// ─── Trade log ──────────────────────────────────────────────
-
-if (engine.trades.length) {
-	console.log('📋 Trade Log (last 20)');
-	console.log('─'.repeat(60));
-	const recent = engine.trades.slice(-20);
-	for (const t of recent) {
-		const emoji = t.side === 'buy' ? '🟢' : '🔴';
-		console.log(`  ${emoji} tick ${String(t.tick).padStart(4)} | ${t.side.padEnd(4)} ${t.amount.toFixed(3)} @ ${t.price.toFixed(6)} = ${t.quoteValue.toFixed(4)} ${quote}`);
+	const strategyName = args.strategy;
+	if (!strategyName || !STRATEGIES[strategyName]) {
+		console.error(`❌ --strategy is required. Valid: ${Object.keys(STRATEGIES).join(', ')}`);
+		process.exit(1);
 	}
+
 	console.log('');
-}
-
-// ─── CSV export ─────────────────────────────────────────────
-
-if (args.csv) {
-	const dir = ensureReportsDir();
-	const headers = ['tick', 'side', 'price', 'amount', 'quoteValue'];
-	const csvRows = engine.trades.map(t => [t.tick, t.side, t.price, t.amount, t.quoteValue]);
-	const file = writeCsv(dir, `backtest-${strategyName}`, headers, csvRows);
-	console.log(`💾 CSV exported → ${file}`);
+	console.log('╔══════════════════════════════════════════════════════════╗');
+	console.log('║       🔬  BACKTEST ENGINE                               ║');
+	console.log('╚══════════════════════════════════════════════════════════╝');
+	console.log(`  Strategy: ${strategyName}`);
+	console.log(`  Chain: ${chain}  |  Pair: ${base}/${quote}`);
+	console.log(`  Range: ${since.slice(0, 10)} → ${until.slice(0, 10)}`);
 	console.log('');
-}
 
-console.log('✅ Backtest complete.\n');
+	// ─── Load data ──────────────────────────────────────────────
+
+	const snapshots = getSnapshotsByDateRange(chain, base, quote, since, until);
+	const realTrades = getTradesByDateRange(chain, base, quote, since, until);
+
+	console.log(`  📸 Snapshots loaded: ${snapshots.length}`);
+	console.log(`  🔄 Real trades loaded: ${realTrades.length}`);
+
+	if (!snapshots.length) {
+		console.log('\n  ⚠️  No snapshots found — cannot backtest without order book history.\n');
+		process.exit(0);
+	}
+
+	// ─── Run simulation ─────────────────────────────────────────
+
+	const engine = new BacktestEngine();
+	const simFn = STRATEGIES[strategyName];
+	simFn(engine, snapshots, realTrades);
+
+	const lastMid = snapshots[snapshots.length - 1].midPrice || 0.20;
+	const s = engine.stats(lastMid);
+
+	console.log('');
+	console.log('📊 Backtest Results');
+	console.log('═'.repeat(50));
+	console.log(`  Strategy:       ${strategyName}`);
+	console.log(`  Total trades:   ${s.totalTrades} (${s.buys} buys, ${s.sells} sells)`);
+	console.log(`  Initial equity: ${engine.initialEquity.toFixed(4)} ${quote}`);
+	console.log(`  Final equity:   ${s.finalEquity} ${quote}`);
+	console.log(`  P&L:            ${s.pnl >= 0 ? '🟢' : '🔴'} ${s.pnl} ${quote} (${s.pnlPercent}%)`);
+	console.log(`  Max drawdown:   ${s.maxDrawdown}%`);
+	console.log(`  Win rate:       ${s.winRate}%`);
+	console.log(`  Avg buy price:  ${s.avgBuyPrice}`);
+	console.log(`  Last mid price: ${lastMid.toFixed(6)}`);
+	console.log('');
+
+	// ─── Trade log ──────────────────────────────────────────────
+
+	if (engine.trades.length) {
+		console.log('📋 Trade Log (last 20)');
+		console.log('─'.repeat(60));
+		const recent = engine.trades.slice(-20);
+		for (const t of recent) {
+			const emoji = t.side === 'buy' ? '🟢' : '🔴';
+			console.log(`  ${emoji} tick ${String(t.tick).padStart(4)} | ${t.side.padEnd(4)} ${t.amount.toFixed(3)} @ ${t.price.toFixed(6)} = ${t.quoteValue.toFixed(4)} ${quote}`);
+		}
+		console.log('');
+	}
+
+	// ─── CSV export ─────────────────────────────────────────────
+
+	if (args.csv) {
+		const dir = ensureReportsDir();
+		const headers = ['tick', 'side', 'price', 'amount', 'quoteValue'];
+		const csvRows = engine.trades.map(t => [t.tick, t.side, t.price, t.amount, t.quoteValue]);
+		const file = writeCsv(dir, `backtest-${strategyName}`, headers, csvRows);
+		console.log(`💾 CSV exported → ${file}`);
+		console.log('');
+	}
+
+	console.log('✅ Backtest complete.\n');
 
 } // end if (isMainModule)
 
