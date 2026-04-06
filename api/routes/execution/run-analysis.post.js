@@ -8,8 +8,8 @@ import path from 'path';
 import auth from '../../middlewares/auth.js';
 
 const ALLOWED_SCRIPTS = {
-	summary:  'scripts/analysis/dashboard-summary.js',
-	analyze:  'scripts/analysis/analyze-log.js',
+	summary: 'scripts/analysis/dashboard-summary.js',
+	analyze: 'scripts/analysis/analyze-log.js',
 	backtest: 'scripts/analysis/backtest.js',
 };
 

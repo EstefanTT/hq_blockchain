@@ -358,10 +358,10 @@ export function getAnalysisLogsPaginated(chainName, { limit = 50, beforeId = nul
 	           FROM analysis_log WHERE chainName = @chainName`;
 	const params = { chainName, limit };
 
-	if (beforeId)  { sql += ` AND id < @beforeId`;  params.beforeId = beforeId; }
+	if (beforeId) { sql += ` AND id < @beforeId`; params.beforeId = beforeId; }
 	if (eventType) { sql += ` AND eventType = @eventType`; params.eventType = eventType; }
-	if (severity)  { sql += ` AND severity = @severity`;   params.severity = severity; }
-	if (search)    { sql += ` AND message LIKE @search`;   params.search = '%' + search + '%'; }
+	if (severity) { sql += ` AND severity = @severity`; params.severity = severity; }
+	if (search) { sql += ` AND message LIKE @search`; params.search = '%' + search + '%'; }
 
 	sql += ` ORDER BY id DESC LIMIT @limit`;
 	return db.prepare(sql).all(params);
