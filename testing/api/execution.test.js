@@ -1,6 +1,6 @@
 // testing/api/execution.test.js
-// Tests for the execution API route handlers.
-// Run with: node testing/api/execution.test.js
+// Tests for the execution API route handlers (bot-count-agnostic).
+// Run with: node --test testing/api/execution.test.js
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -41,7 +41,7 @@ describe('POST /api/execution/pause', async () => {
 		};
 
 		const res = mockRes();
-		await handler(mockReq(), res);
+		await handler(mockReq({ bot: 'steem-dex-bot' }), res);
 
 		assert.equal(res._json.ok, true);
 		assert.equal(res._json.action, 'forced_defensive');
@@ -111,7 +111,7 @@ describe('POST /api/execution/switch-mode', async () => {
 		};
 
 		const res = mockRes();
-		await handler(mockReq({ mode: 'grid-range' }), res);
+		await handler(mockReq({ bot: 'steem-dex-bot', mode: 'grid-range' }), res);
 
 		assert.equal(res._json.ok, true);
 		assert.equal(res._json.mode, 'grid-range');
@@ -128,7 +128,7 @@ describe('POST /api/execution/switch-mode', async () => {
 		};
 
 		const res = mockRes();
-		await handler(mockReq({ mode: 'turbo' }), res);
+		await handler(mockReq({ bot: 'steem-dex-bot', mode: 'turbo' }), res);
 
 		assert.equal(res._status, 400);
 		assert.equal(res._json.ok, false);
@@ -144,7 +144,7 @@ describe('POST /api/execution/switch-mode', async () => {
 		};
 
 		const res = mockRes();
-		await handler(mockReq({}), res);
+		await handler(mockReq({ bot: 'steem-dex-bot' }), res);
 
 		assert.equal(res._status, 400);
 	});

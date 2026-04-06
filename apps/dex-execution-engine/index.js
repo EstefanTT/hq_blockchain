@@ -1,10 +1,48 @@
 // apps/dex-execution-engine/index.js
 // Accepts trade intents and routes them through core/execution for DEX execution.
 
+export const meta = {
+	name: 'dex-execution-engine',
+	displayName: 'DEX Execution Engine',
+	chain: 'ethereum',
+	pairs: [],
+	description: 'Routes trade intents through core/execution for on-chain DEX execution',
+};
+
+let dataActive = false;
+let tradingActive = false;
+
 export async function init() {
-	console.info('BOT', 'DEX-ENGINE', 'Initializing');
+	console.info('BOT', meta.name.toUpperCase(), 'Initialized (stub)');
+}
+
+export async function startDataCollection() {
+	dataActive = true;
+	console.info('BOT', meta.name.toUpperCase(), 'Data collection started (stub)');
+}
+
+export async function stopDataCollection() {
+	if (tradingActive) await stopBot();
+	dataActive = false;
+	console.info('BOT', meta.name.toUpperCase(), 'Data collection stopped (stub)');
+}
+
+export async function startBot() {
+	if (!dataActive) await startDataCollection();
+	tradingActive = true;
+	console.info('BOT', meta.name.toUpperCase(), 'Bot started (stub)');
+}
+
+export async function stopBot() {
+	tradingActive = false;
+	console.info('BOT', meta.name.toUpperCase(), 'Bot stopped (stub)');
 }
 
 export async function shutdown() {
-	console.info('BOT', 'DEX-ENGINE', 'Shutting down');
+	await stopDataCollection();
+	console.info('BOT', meta.name.toUpperCase(), 'Shutdown complete (stub)');
+}
+
+export function getStatus() {
+	return { dataCollection: dataActive, trading: tradingActive, error: null };
 }

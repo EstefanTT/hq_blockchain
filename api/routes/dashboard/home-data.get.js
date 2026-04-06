@@ -6,45 +6,59 @@ import auth from '../../middlewares/auth.js';
 
 export default [auth, async function handler(_req, res) {
 	try {
-		const { getSteemDexBotData, getBotControlState } = await import('../../../services/cache/index.js');
+		const { getBotData } = await import('../../../services/cache/index.js');
 		const { isKilled } = await import('../../../core/risk/killSwitch.js');
-		const { isTradingActive, getBotName, isDataCollectionActive } = await import('../../../apps/steem-dex-bot/index.js');
 		const { getBotControl, getEffectiveConfig } = await import('../../../services/dynamicConfig/index.js');
 		const { isDryRunEnabled } = await import('../../../core/execution/dryRun.js');
 		const { isBrainRunning, getCurrentMode } = await import('../../../strategies/engine/brain.js');
-		const { getRecentAnalysisLogs } = await import('../../../services/storage/steemDexStore.js');
+		const { getRecentAnalysisLogs } = await import('../../../services/storage/botStore.js');
+		const { listBots, getBotModule } = await import('../../../services/botRegistry/index.js');
 
-		const botName = getBotName();
-		const botData = getSteemDexBotData();
-		const control = getBotControl(botName);
+		const registeredBots = listBots();
 
-		const bots = [
-			{
-				name: botName,
-				label: 'STEEM DEX Bot',
-				chain: 'Steem',
-				pair: 'STEEM / SBD',
-				enabled: isTradingActive(),
-				dataCollection: isDataCollectionActive(),
+		const bots = registeredBots.map(botMeta => {
+			const mod = getBotModule(botMeta.name);
+			const status = mod.getStatus();
+			const control = getBotControl(botMeta.name);
+
+			const bot = {
+				name: botMeta.name,
+				label: botMeta.displayName,
+				chain: botMeta.chain,
+				pair: botMeta.pairs.join(' / '),
+				enabled: status.trading,
+				dataCollection: status.dataCollection,
 				dryRun: control.dryRun,
 				disabledStrategies: control.disabledStrategies,
-				brainRunning: isBrainRunning(),
-				currentMode: getCurrentMode(),
-				accountData: botData.accountData,
-				priceEngine: botData.priceEngine,
-			},
-		];
+				error: status.error,
+			};
 
+			// Enrich with brain info and cache data for bots that have it
+			const botData = getBotData(botMeta.name);
+			if (botData) {
+				if (botMeta.name === 'steem-dex-bot') {
+					bot.brainRunning = isBrainRunning();
+					bot.currentMode = getCurrentMode();
+				}
+				bot.accountData = botData.accountData;
+				bot.priceEngine = botData.priceEngine;
+			}
+
+			return bot;
+		});
+
+		// Overview data (from primary bot for now)
+		const botData = getBotData('steem-dex-bot');
 		const overview = {
-			appSizeInfo: botData.appSizeInfo,
-			storageStats: botData.storageStats,
+			appSizeInfo: botData?.appSizeInfo ?? {},
+			storageStats: botData?.storageStats ?? {},
 		};
 
 		const killSwitchState = isKilled();
 
 		// Recent logs for the dashboard
 		let recentLogs = [];
-		try { recentLogs = getRecentAnalysisLogs('steem', 10); } catch { /* empty */ }
+		try { recentLogs = getRecentAnalysisLogs('steem-dex-bot', 'steem', 10); } catch { /* empty */ }
 
 		return res.json({
 			ok: true,

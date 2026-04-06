@@ -31,10 +31,12 @@ Reusable plumbing. No business logic. Initialized as singletons on import.
 | Module | What it does | When to add code here |
 |---|---|---|
 | `globalConfig/` | Loads `.env`, sets `global.path`, `global.isProduction`, static configs. Auto-executed on import — must be first import in `index.js`. | Adding a new global config value, a new static config file, or a new path constant. |
-| `logger/` | Overrides `console.log/info/warn/error` with color-coded, context-tagged, file-persisted output. | Adding a new context tag (e.g. a new emoji for a new subsystem). |
-| `cache/` | In-memory runtime state (prices, balances, positions, strategy states). Pattern: `actions/` (mutations) and `getters/` (queries). | Adding a new piece of runtime state that multiple modules need fast access to. |
+| `logger/` | Overrides `console.log/info/warn/error` with color-coded, context-tagged, file-persisted output. `botLogger.js` creates per-bot loggers. | Adding a new context tag (e.g. a new emoji for a new subsystem). |
+| `botRegistry/` | Central registry for bot modules and metadata. `registerBot()` / `getBot()` / `listBots()`. | Used by `index.js` to auto-discover bots and by API routes to look up bot status. |
+| `cache/` | In-memory runtime state. Global state (prices, order books) at top level, per-bot state under `runtimeCache.bots[botName]`. Pattern: `actions/` (mutations) and `getters/` (queries). | Adding a new piece of runtime state. Per-bot state: pass `botName` to action/getter functions. |
+| `dynamicConfig/` | Runtime-modifiable config with static → dynamic merge. `getEffectiveConfig(botName)`, `updateParam()`, `setBotControl()`. | Adding runtime config overrides for a bot or strategy. |
 | `messaging/` | Outbound notifications (Telegram, Discord, webhooks). | Adding a new notification channel or a new message template. |
-| `storage/` | Persistence. `sqlite.js` for structured data (executions, orders, PnL). `files.js` for JSONL/JSON I/O. `snapshots.js` for point-in-time portfolio state. | Adding a new DB table, a new file storage pattern, or a new serializer. |
+| `storage/` | Persistence. `sqlite.js` for DB access. `botStore.js` for per-bot trades, positions, snapshots (tables include `botName` column). `files.js` for JSONL/JSON I/O. | Adding a new DB table, a new file storage pattern, or a new serializer. |
 | `validation/` | Zod schemas and a `validate()` helper. | Adding a new schema (put it in `schemas/`) or a new validation helper. |
 
 ### `connectors/` — Adapters to external systems
@@ -107,13 +109,24 @@ First-class, self-contained modules. Each strategy is a folder with a consistent
 
 Each app wires strategies + core + connectors to achieve a specific business goal. Apps run as **modules in the same Node.js process** (loaded by `index.js`). Can be extracted to separate processes later if isolation is needed.
 
+Apps register themselves via `botRegistry` (`registerBot(meta.name, module, meta)`) and are auto-discovered at boot.
+
+**Bot lifecycle contract** (every app exports these):
+- `meta` — object with `name`, `description`, `version`
+- `init()` — setup, register with botRegistry, initialize cache namespace
+- `startDataCollection()` / `stopDataCollection()` — market data polling
+- `startBot()` / `stopBot()` — trading logic
+- `shutdown()` — cleanup
+- `getStatus()` — returns `{ running, dataCollecting, ... }`
+
 **Each app folder contains:**
-- `index.js` — exports `init()` and `shutdown()`
+- `index.js` — exports lifecycle functions above
 - `config.json` — app-specific configuration
 - `README.md` — purpose and how to enable
 
 | App | Purpose |
 |---|---|
+| `steem-dex-bot/` | Market-making and spread-capture on Steem/Hive DEX (fully implemented) |
 | `portfolio-monitor/` | Track balances/positions across wallets and chains |
 | `spread-bot/` | Run spread-capture strategy on configured pools |
 | `dex-execution-engine/` | Accept trade intents, route and execute on DEXes |
@@ -122,7 +135,8 @@ Each app wires strategies + core + connectors to achieve a specific business goa
 
 **When to add code here:**
 - New use case that composes existing strategies/core → `apps/new-app/`
-- Enabling an app → uncomment its import in `index.js`
+- Implement the bot lifecycle contract, call `initBotCache(BOT_NAME)` in `init()`
+- All per-bot cache calls must pass `botName` as first argument
 
 ### `api/` — HTTP interface
 
@@ -184,7 +198,7 @@ Express.js with **file-based routing** (Nuxt 3 style, ported from hq-home).
 | Add a new risk check | `core/risk/` |
 | Track a new portfolio metric | `core/portfolio/` |
 | Create a new trading strategy | `strategies/new-strategy/` (index.js + config.schema.js + README.md) |
-| Build a new bot / app | `apps/new-app/` (index.js + config.json + README.md) |
+| Build a new bot / app | `apps/new-app/` (index.js + config.json + README.md) — implement lifecycle contract, register via `botRegistry` |
 | Expose a new HTTP endpoint | `api/routes/domain/action.method.js` |
 | Add a scheduled task | `scheduler/crons/task.js` + wire in `cronManager.js` |
 | Add a new notification channel | `services/messaging/` |
@@ -206,7 +220,7 @@ Express.js with **file-based routing** (Nuxt 3 style, ported from hq-home).
 3. Delayed imports (so `global.*` is available):
    - API server (Express) → listen on PORT
    - `startCrons()` → production only
-   - Apps → `init()` each enabled app
+   - Apps → `init()` each enabled app → each registers itself via `registerBot()` and initializes its cache namespace via `initBotCache()`
 
 ---
 
@@ -217,7 +231,9 @@ Express.js with **file-based routing** (Nuxt 3 style, ported from hq-home).
 - **Singletons**: services auto-initialize on import. No `new`, no factory functions
 - **Registry pattern**: connectors expose `register*()` / `get*()` / `list*()` in `registry.js`
 - **Strategy contract**: every strategy exports `init()`, `tick()`, `shutdown()`, `describe()` + has `config.schema.js`
-- **App contract**: every app exports `init()` and `shutdown()` + has `config.json`
+- **App contract**: every app exports `meta` + lifecycle functions (`init`, `startDataCollection`, `stopDataCollection`, `startBot`, `stopBot`, `shutdown`, `getStatus`) + has `config.json`
+- **Bot registry**: apps register via `registerBot(name, module, meta)` — API routes and dashboard look up bots through the registry
+- **Cache namespacing**: per-bot runtime state lives under `runtimeCache.bots[botName]` — always pass `botName` to per-bot cache functions
 - **File routing**: `routes/domain/action.method.js` → auto-registered HTTP endpoint
 - **Cron pattern**: `crons/taskName.js` default export async function, scheduled in `cronManager.js`
 - **Config**: secrets in `.env`, static config in `config/static/*.json`, runtime config in `config/dynamic/`

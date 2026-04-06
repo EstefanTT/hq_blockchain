@@ -6,8 +6,9 @@ import auth from '../../middlewares/auth.js';
 
 export default [auth, async function handler(req, res) {
 	try {
-		const { getAnalysisLogsPaginated, getDistinctEventTypes } = await import('../../../services/storage/steemDexStore.js');
+		const { getAnalysisLogsPaginated, getDistinctEventTypes } = await import('../../../services/storage/botStore.js');
 
+		const botName = req.query.bot || 'steem-dex-bot';
 		const chainName = req.query.chain || 'steem';
 		const limit = Math.min(parseInt(req.query.limit) || 50, 200);
 		const beforeId = req.query.beforeId ? parseInt(req.query.beforeId) : null;
@@ -15,8 +16,8 @@ export default [auth, async function handler(req, res) {
 		const severity = req.query.severity || null;
 		const search = req.query.search || null;
 
-		const logs = getAnalysisLogsPaginated(chainName, { limit, beforeId, eventType, severity, search });
-		const eventTypes = getDistinctEventTypes(chainName);
+		const logs = getAnalysisLogsPaginated(botName, chainName, { limit, beforeId, eventType, severity, search });
+		const eventTypes = getDistinctEventTypes(botName, chainName);
 
 		// Parse JSON data field
 		for (const row of logs) {

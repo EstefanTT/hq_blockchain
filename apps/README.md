@@ -1,18 +1,53 @@
 # apps/
 
-Runnable compositions — each wires strategies, core, and services to achieve a specific business goal.
+Runnable compositions — each wires strategies, core, and services to achieve a specific business goal. Apps run as **modules in the same Node.js process** (loaded by `index.js`). Can be extracted to separate processes later if isolation is needed.
 
-Apps run as **modules in the same Node process** (loaded by `index.js`). Can be extracted to separate processes later if isolation is needed.
+## File Inventory
 
-Each app has:
-- `index.js` — exports `init()` and `shutdown()`, wires dependencies
+| Folder | Purpose | Status |
+|---|---|---|
+| `steem-dex-bot/` | Market-making and spread-capture on Steem/Hive DEX — full lifecycle with brain, micro-layer, rebalance | Active — fully implemented |
+| `spread-bot/` | Run spread-capture strategy on configured pools | Scaffold |
+| `dex-execution-engine/` | Accept trade intents, route and execute on DEXes | Scaffold |
+| `portfolio-monitor/` | Track balances and positions across wallets/chains | Scaffold |
+| `onchain-analyzer/` | Monitor on-chain data, wallet movements, token flows | Scaffold |
+| `research-sandbox/` | Scratch space for experiments (run directly, not via main process) | Scaffold |
+
+Each app folder contains:
+- `index.js` — exports lifecycle functions
 - `config.json` — app-specific configuration
-- `README.md` — what it does, how to enable it
+- `README.md` — purpose and how to enable
 
-| App | Purpose |
-|---|---|
-| **portfolio-monitor/** | Track balances and positions across all wallets/chains |
-| **spread-bot/** | Run spread-capture strategy on configured pools |
-| **dex-execution-engine/** | Accept trade intents, route and execute on DEXes |
-| **onchain-analyzer/** | Monitor on-chain data, wallet movements, token flows |
-| **research-sandbox/** | Scratch space for testing ideas, one-off scripts |
+## Interface Contract
+
+All apps are registered via `botRegistry` and implement the **bot lifecycle contract**:
+
+```js
+export const meta = { name: 'my-bot', description: '...', version: '1.0.0' };
+export async function init() { }
+export async function startDataCollection() { }
+export async function stopDataCollection() { }
+export async function startBot() { }
+export async function stopBot() { }
+export async function shutdown() { }
+export function getStatus() { return { running, dataCollecting, ... }; }
+```
+
+Apps are auto-discovered by `index.js` at boot — register via `registerBot(meta.name, module, meta)`.
+
+## Dependencies
+
+- `services/botRegistry` — to register the app
+- `services/cache` — per-bot runtime state (`initBotCache(botName)`, `getBotData(botName)`)
+- `services/dynamicConfig` — for runtime config overrides
+- `services/storage` — for persisting trades, snapshots
+- `strategies/` — for wiring strategy logic
+- `core/` — for execution, risk, and market modules
+
+## Conventions
+
+- Each app's cache state is namespaced under `runtimeCache.bots[botName]`
+- Call `initBotCache(BOT_NAME)` during `init()` before using per-bot cache functions
+- All per-bot cache calls pass `BOT_NAME` as first argument
+- Don't import from other apps — share logic via `core/` or `strategies/`
+- New app → create `apps/new-app/` with `index.js` + `config.json` + `README.md`, implement the lifecycle contract

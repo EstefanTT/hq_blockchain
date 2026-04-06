@@ -16,4 +16,6 @@ export {
 	getCurrentPosition,
 	countTradesToday,
 	getRecentAnalysisLogs,
-} from './steemDexStore.js';
+	countAllTradesToday,
+	getAllBotPositions,
+} from './botStore.js';

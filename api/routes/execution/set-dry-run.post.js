@@ -14,18 +14,17 @@ export default [auth, async function handler(req, res) {
 		}
 
 		const { setDryRun, isDryRunEnabled } = await import('../../../core/execution/dryRun.js');
-		const { setDryRunFlag } = await import('../../../services/cache/index.js');
 
-		// Global dry-run
+		// Global dry-run (execution module)
 		setDryRun(enabled);
-		setDryRunFlag(enabled);
 
-		// Per-bot dry-run (persisted)
+		// Per-bot dry-run (persisted + cache)
 		if (bot) {
 			const { setBotControl, getBotControl } = await import('../../../services/dynamicConfig/index.js');
-			const { updateBotControlState } = await import('../../../services/cache/index.js');
+			const { updateBotControlState, setDryRunFlag } = await import('../../../services/cache/index.js');
 			setBotControl(bot, { dryRun: enabled });
 			updateBotControlState(bot, getBotControl(bot));
+			setDryRunFlag(bot, enabled);
 		}
 
 		return res.json({ ok: true, dryRun: isDryRunEnabled(), bot: bot || null });

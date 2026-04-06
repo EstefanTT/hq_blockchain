@@ -1,0 +1,27 @@
+{
+	"name": "your-bot-name",
+	"displayName": "Your Bot Name",
+	"chain": "chain-name",
+	"baseToken": "TOKEN_A",
+	"quoteToken": "TOKEN_B",
+
+	"dryRun": true,
+	"enabled": false,
+
+	"dataCollectionIntervalMs": 10000,
+	"strategyIntervalMs": 30000,
+
+	"risk": {
+		"maxPositionSize": 1000,
+		"maxDailyTrades": 50,
+		"stopLossPercent": 5
+	},
+
+	"strategies": {
+		"exampleStrategy": {
+			"enabled": false,
+			"param1": 0.5,
+			"param2": 100
+		}
+	}
+}

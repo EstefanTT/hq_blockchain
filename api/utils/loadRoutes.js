@@ -31,7 +31,7 @@ export default async function loadRoutes(app, dir, baseRoute = '/api') {
 
 				const [, name, method] = match;
 				const routePath = path.join(routePrefix, name === 'index' ? '' : name);
-				const routeUrl = routePath.replace(/\\/g, '/');
+				const routeUrl = routePath.replace(/\\/g, '/').replace(/\[(\w+)\]/g, ':$1');
 
 				const moduleUrl = pathToFileURL(fullPath).href;
 				const mod = await import(moduleUrl);

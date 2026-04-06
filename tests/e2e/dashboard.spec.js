@@ -1,4 +1,5 @@
 // tests/e2e/dashboard.spec.js — E2E tests for all dashboard pages.
+// Bot-count-agnostic: tests adapt to whatever bots are registered.
 // Verifies page load, data population, controls, and captures screenshots.
 
 import { test, expect } from '@playwright/test';
@@ -43,7 +44,9 @@ test.describe('Master Dashboard', () => {
 		// Sidebar links exist (use aside scope to avoid ambiguity)
 		const sidebar = page.locator('aside');
 		await expect(sidebar.locator('a[href="/api/dashboard"]')).toBeVisible();
-		await expect(sidebar.locator('a[href="/api/dashboard/steem-dex-bot"]')).toBeVisible();
+		// Bot links are dynamically generated — at least one should exist
+		const botLinks = sidebar.locator('a[href^="/api/dashboard/bots/"]');
+		expect(await botLinks.count()).toBeGreaterThanOrEqual(1);
 		await expect(sidebar.locator('a[href="/api/dashboard/logs"]')).toBeVisible();
 
 		// Top bar elements
@@ -74,7 +77,12 @@ test.describe('Master Dashboard', () => {
 		await page.waitForSelector('#bot-cards .card', { timeout: 15_000 });
 
 		const botCards = page.locator('#bot-cards .card');
-		await expect(botCards).toHaveCount(1); // 1 bot: steem-dex-bot
+		// Dynamic: bot count matches registered bots from API
+		const homeRes = await page.request.get('/api/dashboard/home-data', {
+			headers: { 'X-API-Token': API_TOKEN },
+		});
+		const homeData = await homeRes.json();
+		await expect(botCards).toHaveCount(homeData.bots.length);
 
 		// Bot card has toggle labels (the input is hidden, check the label wrapper)
 		const toggles = botCards.first().locator('.toggle');
@@ -140,17 +148,66 @@ test.describe('Master Dashboard', () => {
 	});
 });
 
-// ─── STEEM DEX Bot Page ──────────────────────────────────────
+// ─── Parameterized Bot Pages (dynamic) ───────────────────────
 
-test.describe('STEEM DEX Bot Page', () => {
+test.describe('Bot Pages', () => {
+	let bots;
+
+	test.beforeAll(async ({ request }) => {
+		const response = await request.get('/api/dashboard/home-data', {
+			headers: { 'X-API-Token': API_TOKEN },
+		});
+		const data = await response.json();
+		bots = data.bots;
+	});
+
+	test('each registered bot has a working page', async ({ page }) => {
+		await injectToken(page);
+		for (const bot of bots) {
+			await page.goto(`/api/dashboard/bots/${bot.name}`);
+			await expect(page.locator('title')).not.toHaveText('Not Found');
+			// Bot power section should render
+			await expect(page.locator('text=Bot Power')).toBeVisible({ timeout: 10_000 });
+		}
+	});
+
+	test('each bot data endpoint returns valid JSON', async ({ request }) => {
+		for (const bot of bots) {
+			const response = await request.get(`/api/dashboard/bots/data/${bot.name}`, {
+				headers: { 'X-API-Token': API_TOKEN },
+			});
+			expect(response.status()).toBe(200);
+			const data = await response.json();
+			expect(data).toHaveProperty('botMeta');
+			expect(data).toHaveProperty('botControlState');
+		}
+	});
+});
+
+// ─── STEEM DEX Bot Specific ──────────────────────────────────
+
+test.describe('STEEM DEX Bot Specific', () => {
+	let steemRegistered = true;
+
+	test.beforeAll(async ({ request }) => {
+		try {
+			const res = await request.get('/api/dashboard/home-data', {
+				headers: { 'X-API-Token': API_TOKEN },
+			});
+			const data = await res.json();
+			steemRegistered = data.bots.some(b => b.name === 'steem-dex-bot');
+		} catch { steemRegistered = false; }
+	});
+
 	test.beforeEach(async ({ page }) => {
+		test.skip(!steemRegistered, 'steem-dex-bot not registered');
 		await injectToken(page);
 		// Ensure data collection is ON so live-data tests can pass
 		await page.request.post('/api/execution/toggle-data', {
 			headers: { 'X-API-Token': API_TOKEN, 'Content-Type': 'application/json' },
 			data: { bot: 'steem-dex-bot', enabled: true },
 		});
-		await page.goto('/api/dashboard/steem-dex-bot');
+		await page.goto('/api/dashboard/bots/steem-dex-bot');
 	});
 
 	test('page loads with correct title', async ({ page }) => {
@@ -382,9 +439,11 @@ test.describe('Navigation', () => {
 		await page.goto('/api/dashboard');
 		await expect(page).toHaveTitle(/Dashboard/i);
 
-		// Click to bot page via sidebar
-		await page.locator('aside a[href="/api/dashboard/steem-dex-bot"]').click();
-		await expect(page).toHaveTitle(/STEEM DEX Bot/i);
+		// Click to first bot page via sidebar (dynamic — uses whatever bot is registered)
+		const botLink = page.locator('aside a[href^="/api/dashboard/bots/"]').first();
+		await botLink.click();
+		// Title should contain bot display name (not "Not Found")
+		await page.waitForSelector('text=Bot Power', { timeout: 10_000 });
 
 		// Click to logs via sidebar
 		await page.locator('aside a[href="/api/dashboard/logs"]').click();

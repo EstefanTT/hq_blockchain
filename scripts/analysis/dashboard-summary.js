@@ -10,17 +10,18 @@
 //   node scripts/analysis/dashboard-summary.js --days 1
 
 import '../../services/globalConfig/init.js';
-import { getAnalysisLogsByDateRange, getSnapshotsByDateRange, getTradesByDateRange } from '../../services/storage/steemDexStore.js';
+import { getAnalysisLogsByDateRange, getSnapshotsByDateRange, getTradesByDateRange } from '../../services/storage/botStore.js';
 import { parseArgs, chainDefaults, isoRange } from './shared.js';
 
 const args = parseArgs();
 if (!args.days) args.days = '1';   // default to last 24h
 const { chain, base, quote } = chainDefaults(args);
 const { since, until } = isoRange(args);
+const bot = args.bot || 'steem-dex-bot';
 
-const logs = getAnalysisLogsByDateRange(chain, since, until);
-const snapshots = getSnapshotsByDateRange(chain, base, quote, since, until);
-const trades = getTradesByDateRange(chain, base, quote, since, until);
+const logs = getAnalysisLogsByDateRange(bot, chain, since, until);
+const snapshots = getSnapshotsByDateRange(bot, chain, base, quote, since, until);
+const trades = getTradesByDateRange(bot, chain, base, quote, since, until);
 
 // ─── Event counts ────────────────────────────────────────────
 

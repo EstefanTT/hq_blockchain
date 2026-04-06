@@ -1,5 +1,69 @@
 // services/cache/index.js
 // In-memory runtime state. Aggregates actions (mutations) and getters (queries).
+// Per-bot state lives under runtimeCache.bots[botName]. Shared/global state at top level.
+
+// ─── Default per-bot state shape ─────────────────────────────
+
+function defaultBotState() {
+	return {
+		storageStats: {
+			lastSnapshotTime: null,
+			tradesToday: 0,
+			snapshotsToday: 0,
+			currentPosition: null,
+		},
+		accountData: {
+			account: null,
+			balance: null,
+			quoteBalance: null,
+			vestingShares: null,
+			openOrders: [],
+			rc: null,
+			lastRefresh: null,
+		},
+		microLayerStatus: {
+			active: false,
+			buyOrders: 0,
+			sellOrders: 0,
+			totalValueQuote: 0,
+			lastFillTime: null,
+			lastMidPrice: null,
+			levelsConfigured: 0,
+		},
+		strategyStatus: {
+			name: null,
+			active: false,
+			buyOrders: 0,
+			sellOrders: 0,
+			totalValueQuote: 0,
+			lastFillTime: null,
+			lastMidPrice: null,
+		},
+		brainStatus: {
+			currentMode: null,
+			active: false,
+			lastSwitchTime: null,
+			lastSwitchReason: null,
+			nextTickTime: null,
+			signals: {},
+		},
+		riskStatus: {
+			slippageRejectCount: 0,
+			lastSlippageReject: null,
+			lastRebalanceTime: null,
+			lastRebalanceSide: null,
+			lastRebalanceAmount: null,
+			lastRebalancePrice: null,
+		},
+		exploitationStatus: {
+			active: false,
+			cycleCount: 0,
+			phase: 'idle',
+			lastAction: null,
+		},
+		dryRunEnabled: false,
+	};
+}
 
 // ─── State ───────────────────────────────────────────────────
 
@@ -29,88 +93,35 @@ export const runtimeCache = {
 	orderBooks: {},      // { 'steem:STEEM/SBD': { bids, asks, timestamp, midPrice, spread } }
 	recentTrades: {},    // { 'steem:STEEM/SBD': [trade, ...] }
 
-	// Storage stats (Step 3) — lightweight in-memory counters
-	storageStats: {
-		lastSnapshotTime: null,
-		tradesToday: 0,
-		snapshotsToday: 0,
-		currentPosition: null,   // { baseBalance, quoteBalance, averageEntryPrice, lastUpdated }
-	},
-
-	// Account data (Step 4) — balances, open orders, RC
-	accountData: {
-		account: null,
-		balance: null,        // e.g. "549.822 STEEM"
-		quoteBalance: null,   // e.g. "3.410 SBD"
-		vestingShares: null,
-		openOrders: [],
-		rc: null,             // { percentage, currentMana, maxMana }
-		lastRefresh: null,
-	},
-
-	// Micro layer (Step 6) — inverted-pyramid market-making status
-	microLayerStatus: {
-		active: false,
-		buyOrders: 0,
-		sellOrders: 0,
-		totalValueQuote: 0,
-		lastFillTime: null,
-		lastMidPrice: null,
-		levelsConfigured: 0,
-	},
-
-	// Active strategy status (Step 7)
-	strategyStatus: {
-		name: null,
-		active: false,
-		buyOrders: 0,
-		sellOrders: 0,
-		totalValueQuote: 0,
-		lastFillTime: null,
-		lastMidPrice: null,
-	},
-
-	// Brain status (Step 8)
-	brainStatus: {
-		currentMode: null,
-		active: false,
-		lastSwitchTime: null,
-		lastSwitchReason: null,
-		nextTickTime: null,
-		signals: {},
-	},
-
-	// App/log sizes (Step 6)
+	// App/log sizes (system-level)
 	appSizeInfo: {
 		appSizeMB: null,
 		logsSizeMB: null,
 		updatedAt: null,
 	},
 
-	// Risk status (Step 13)
-	riskStatus: {
-		slippageRejectCount: 0,
-		lastSlippageReject: null,
-		lastRebalanceTime: null,
-		lastRebalanceSide: null,
-		lastRebalanceAmount: null,
-		lastRebalancePrice: null,
-	},
-
-	// Bot-exploitation status (Step 13)
-	exploitationStatus: {
-		active: false,
-		cycleCount: 0,
-		phase: 'idle',
-		lastAction: null,
-	},
-
-	// Dry-run flag (Step 14)
-	dryRunEnabled: false,
-
 	// Bot control state (Dashboard improvement)
 	botControl: {},  // { 'steem-dex-bot': { enabled, dryRun, disabledStrategies } }
+
+	// Per-bot namespaced state
+	bots: {},  // { 'steem-dex-bot': { storageStats, accountData, brainStatus, ... } }
 };
+
+// ─── Per-Bot Cache Management ────────────────────────────────
+
+/** Initialize a bot's cache namespace. Idempotent — won't reset existing data. */
+export function initBotCache(botName) {
+	if (runtimeCache.bots[botName]) return;
+	runtimeCache.bots[botName] = defaultBotState();
+}
+
+/** Get a bot's cache namespace, throwing if not initialized. */
+function getBotCache(botName) {
+	if (!runtimeCache.bots[botName]) {
+		throw new Error(`Cache not initialized for bot: ${botName}. Call initBotCache() first.`);
+	}
+	return runtimeCache.bots[botName];
+}
 
 // ─── Actions ─────────────────────────────────────────────────
 
@@ -148,32 +159,32 @@ import _updateMicroLayerStatus from './actions/updateMicroLayerStatus.js';
 import _updateStrategyStatus from './actions/updateStrategyStatus.js';
 import _updateBrainStatus from './actions/updateBrainStatus.js';
 
-export function updateStorageStats(fields) {
-	return _updateStorageStats(runtimeCache, fields);
+export function updateStorageStats(botName, fields) {
+	return _updateStorageStats(getBotCache(botName), fields);
 }
-export function updateAccountData(fields) {
-	return _updateAccountData(runtimeCache, fields);
+export function updateAccountData(botName, fields) {
+	return _updateAccountData(getBotCache(botName), fields);
 }
-export function updateMicroLayerStatus(fields) {
-	return _updateMicroLayerStatus(runtimeCache, fields);
+export function updateMicroLayerStatus(botName, fields) {
+	return _updateMicroLayerStatus(getBotCache(botName), fields);
 }
-export function updateStrategyStatus(fields) {
-	return _updateStrategyStatus(runtimeCache, fields);
+export function updateStrategyStatus(botName, fields) {
+	return _updateStrategyStatus(getBotCache(botName), fields);
 }
-export function updateBrainStatus(fields) {
-	return _updateBrainStatus(runtimeCache, fields);
+export function updateBrainStatus(botName, fields) {
+	return _updateBrainStatus(getBotCache(botName), fields);
 }
 export function updateAppSizeInfo(fields) {
 	Object.assign(runtimeCache.appSizeInfo, fields);
 }
-export function updateRiskStatus(fields) {
-	Object.assign(runtimeCache.riskStatus, fields);
+export function updateRiskStatus(botName, fields) {
+	Object.assign(getBotCache(botName).riskStatus, fields);
 }
-export function updateExploitationStatus(fields) {
-	Object.assign(runtimeCache.exploitationStatus, fields);
+export function updateExploitationStatus(botName, fields) {
+	Object.assign(getBotCache(botName).exploitationStatus, fields);
 }
-export function setDryRunFlag(enabled) {
-	runtimeCache.dryRunEnabled = !!enabled;
+export function setDryRunFlag(botName, enabled) {
+	getBotCache(botName).dryRunEnabled = !!enabled;
 }
 export function updateBotControlState(botName, control) {
 	runtimeCache.botControl[botName] = { ...control };
@@ -184,12 +195,18 @@ export function getBotControlState(botName) {
 
 // ─── Getters ─────────────────────────────────────────────────
 
-import _getSteemDexBotData from './getters/getSteemDexBotData.js';
+import _getBotData from './getters/getBotData.js';
 import _getLiveOrderBook from './getters/getLiveOrderBook.js';
 import _getRecentTrades from './getters/getRecentTrades.js';
 
+/** Returns merged global + per-bot state for the given bot. */
+export function getBotData(botName) {
+	return _getBotData(runtimeCache, botName);
+}
+
+/** @deprecated Use getBotData(botName) instead */
 export function getSteemDexBotData() {
-	return _getSteemDexBotData(runtimeCache);
+	return _getBotData(runtimeCache, 'steem-dex-bot');
 }
 export function getLiveOrderBook(cacheKey) {
 	return _getLiveOrderBook(runtimeCache, cacheKey);

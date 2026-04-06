@@ -23,11 +23,12 @@ export default [auth, async function handler(req, res) {
 		const { updateSection, getEffectiveConfig } = await import('../../../services/dynamicConfig/index.js');
 		updateSection(bot, section, params);
 
-		// Hot-reload into running bot
-		if (bot === 'steem-dex-bot') {
-			const { reloadConfig } = await import('../../../apps/steem-dex-bot/index.js');
-			await reloadConfig();
-		}
+		// Hot-reload into running bot (if it supports reloadConfig)
+		const { getBotModule } = await import('../../../services/botRegistry/index.js');
+		try {
+			const mod = getBotModule(bot);
+			if (mod.reloadConfig) await mod.reloadConfig();
+		} catch { /* bot not registered yet or no reloadConfig */ }
 
 		return res.json({ ok: true, bot, section, effective: getEffectiveConfig(bot)[section] });
 	} catch (err) {

@@ -10,20 +10,21 @@ export default [auth, async function handler(req, res) {
 	try {
 		const { bot, enabled } = req.body ?? {};
 		if (!bot || typeof enabled !== 'boolean') {
-			return res.status(400).json({ ok: false, error: 'Body must contain { "bot": "steem-dex-bot", "enabled": true|false }' });
+			return res.status(400).json({ ok: false, error: 'Body must contain { "bot": "<name>", "enabled": true|false }' });
 		}
 
-		if (bot === 'steem-dex-bot') {
-			const { startDataCollection, stopDataCollection, isDataCollectionActive } = await import('../../../apps/steem-dex-bot/index.js');
-			if (enabled) {
-				await startDataCollection();
-			} else {
-				await stopDataCollection();
-			}
-			return res.json({ ok: true, bot, dataCollection: isDataCollectionActive() });
+		const { getBotModule } = await import('../../../services/botRegistry/index.js');
+		let mod;
+		try { mod = getBotModule(bot); } catch {
+			return res.status(404).json({ ok: false, error: `Unknown bot: ${bot}` });
 		}
 
-		return res.status(404).json({ ok: false, error: `Unknown bot: ${bot}` });
+		if (enabled) {
+			await mod.startDataCollection();
+		} else {
+			await mod.stopDataCollection();
+		}
+		return res.json({ ok: true, bot, dataCollection: mod.getStatus().dataCollection });
 	} catch (err) {
 		return res.status(500).json({ ok: false, error: err.message });
 	}

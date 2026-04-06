@@ -3,7 +3,7 @@
 //
 // Human log  → console (via existing logger) + logs/bot.log (emoji-rich, readable)
 // Analysis   → data/analysis/<botName>.log.jsonl (structured JSON per line)
-//            → analysis_log SQLite table (via steemDexStore.logAnalysisEvent)
+//            → analysis_log SQLite table (via botStore.logAnalysisEvent)
 //
 // Usage:
 //   import { createBotLogger } from '../../services/logger/botLogger.js';
@@ -91,7 +91,7 @@ export function createBotLogger({ botName, chainName }) {
 	let _logAnalysisEvent = null;
 	async function getLogAnalysisEvent() {
 		if (!_logAnalysisEvent) {
-			const mod = await import('../storage/steemDexStore.js');
+			const mod = await import('../storage/botStore.js');
 			_logAnalysisEvent = mod.logAnalysisEvent;
 		}
 		return _logAnalysisEvent;
@@ -120,7 +120,7 @@ export function createBotLogger({ botName, chainName }) {
 		jsonlStream.write(JSON.stringify(record) + '\n');
 
 		// SQLite — fire-and-forget (lazy loaded)
-		getLogAnalysisEvent().then(fn => fn(record)).catch(() => { });
+		getLogAnalysisEvent().then(fn => fn(botName, record)).catch(() => { });
 	}
 
 	// ─── Public API ──────────────────────────────────────────

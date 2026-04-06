@@ -47,14 +47,40 @@ async function run() {
 
 	// ##########################################    APPS   ##########################################
 
-	// Apps are loaded as modules in the same process.
-	// To enable an app, import and call its init function here.
-	// Example:
-	// const { init: initSpreadBot } = await import('./apps/spread-bot/index.js');
-	// await initSpreadBot();
+	// Auto-discover all bot apps from apps/ directory.
+	// Each bot must export a `meta` object to be registered. Folders without meta are skipped.
+	// Folders starting with _ are skipped (e.g. _template).
 
-	const { init: initSteemDexBot } = await import('./apps/steem-dex-bot/index.js');
-	await initSteemDexBot();
+	const { readdirSync } = await import('fs');
+	const { join } = await import('path');
+	const { registerBot } = await import('./services/botRegistry/index.js');
+
+	const appsDir = join(global.path.root, 'apps');
+	for (const entry of readdirSync(appsDir, { withFileTypes: true })) {
+		if (!entry.isDirectory()) continue;
+		if (entry.name.startsWith('_')) continue;
+
+		let mod;
+		try {
+			mod = await import(`./apps/${entry.name}/index.js`);
+		} catch (err) {
+			console.error('BOOT', `Failed to import apps/${entry.name}: ${err.message}`);
+			continue;
+		}
+
+		if (!mod.meta) {
+			console.info('BOOT', `Skipping apps/${entry.name} (no meta export)`);
+			continue;
+		}
+
+		registerBot(mod.meta.name, mod, mod.meta);
+
+		try {
+			await mod.init();
+		} catch (err) {
+			console.error('BOOT', `${mod.meta.displayName} init failed: ${err.message}`);
+		}
+	}
 
 	console.info('START', 'App ready ✅');
 }

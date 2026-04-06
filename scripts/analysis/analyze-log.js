@@ -24,7 +24,7 @@
 //   --csv               Also export CSV to data/reports/
 
 import '../../services/globalConfig/init.js';
-import { getAnalysisLogsByDateRange } from '../../services/storage/steemDexStore.js';
+import { getAnalysisLogsByDateRange } from '../../services/storage/botStore.js';
 import { parseArgs, chainDefaults, isoRange, ensureReportsDir, writeCsv } from './shared.js';
 
 // ─── Strategy → eventType mapping (D4) ──────────────────────
@@ -44,6 +44,7 @@ const STRATEGY_EVENT_MAP = {
 const args = parseArgs();
 const { chain, base, quote } = chainDefaults(args);
 const { since, until } = isoRange(args);
+const bot = args.bot || 'steem-dex-bot';
 
 console.log('');
 console.log('╔══════════════════════════════════════════════════════════╗');
@@ -56,7 +57,7 @@ console.log('');
 
 // ─── Fetch ───────────────────────────────────────────────────
 
-let rows = getAnalysisLogsByDateRange(chain, since, until);
+let rows = getAnalysisLogsByDateRange(bot, chain, since, until);
 
 // Strategy filter (D4)
 if (args.strategy) {

@@ -18,6 +18,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const staticConfig = JSON.parse(readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
 const BOT_NAME = staticConfig.name;
 
+export const meta = {
+	name: 'steem-dex-bot',
+	displayName: 'STEEM DEX Bot',
+	chain: 'steem',
+	pairs: ['STEEM/SBD'],
+	description: 'Market-making and multi-strategy trading on the Steem internal DEX',
+};
+
 const SNAPSHOT_INTERVAL_MS = 30_000;     // 30s periodic order book snapshots
 const ACCOUNT_REFRESH_MS = 60_000;       // 60s periodic account data refresh
 
@@ -60,9 +68,12 @@ export async function init() {
 	const config = getEffectiveConfig(BOT_NAME);
 
 	// Initialize SQLite tables
-	const { saveOrderBookSnapshot, addTrades, getCurrentPosition, countTradesToday } = await import('../../services/storage/steemDexStore.js');
+	const { saveOrderBookSnapshot, addTrades, getCurrentPosition, countTradesToday } = await import('../../services/storage/botStore.js');
 	cacheModule = await import('../../services/cache/index.js');
-	const { getLiveOrderBook, updateStorageStats, updateBotControlState, getSteemDexBotData } = cacheModule;
+	const { getLiveOrderBook, updateStorageStats, updateBotControlState, getBotData } = cacheModule;
+
+	// Initialize per-bot cache namespace
+	cacheModule.initBotCache(BOT_NAME);
 
 	const { chainName } = config;
 	const base = config.baseToken.symbol;
@@ -73,9 +84,9 @@ export async function init() {
 	updateBotControlState(BOT_NAME, getBotControl(BOT_NAME));
 
 	// Seed storage stats from DB
-	const pos = getCurrentPosition(chainName, base, quote);
-	const tradesToday = countTradesToday(chainName, base, quote);
-	updateStorageStats({ tradesToday, currentPosition: pos });
+	const pos = getCurrentPosition(BOT_NAME, chainName, base, quote);
+	const tradesToday = countTradesToday(BOT_NAME, chainName, base, quote);
+	updateStorageStats(BOT_NAME, { tradesToday, currentPosition: pos });
 
 	// Create the price engine (but don't start yet)
 	const { PriceEngine } = await import('../../core/market/priceEngine.js');
@@ -105,9 +116,9 @@ export async function init() {
 	const { onBotExploitTradeEvent } = await import('../../strategies/bot-exploitation/index.js');
 	const { onRebalanceTradeEvent } = await import('../../core/risk/rebalance.js');
 	chainAdapter.subscribe('trade', (trade) => {
-		const inserted = addTrades(chainName, base, quote, [trade]);
+		const inserted = addTrades(BOT_NAME, chainName, base, quote, [trade]);
 		if (inserted > 0) {
-			updateStorageStats({ tradesToday: (countTradesToday(chainName, base, quote)) });
+			updateStorageStats(BOT_NAME, { tradesToday: (countTradesToday(BOT_NAME, chainName, base, quote)) });
 			log.info('TRADE', `${trade.type.toUpperCase()} ${trade.amountBase} ${base} @ ${trade.price.toFixed(4)}`, trade);
 		}
 		onTradeEvent(trade);
@@ -131,7 +142,7 @@ export async function init() {
 		// Install dry-run wrapper
 		const { createDryRunWrapper, setDryRun } = await import('../../core/execution/dryRun.js');
 		setDryRun(config.dryRun ?? false);
-		cacheModule.setDryRunFlag(config.dryRun ?? false);
+		cacheModule.setDryRunFlag(BOT_NAME, config.dryRun ?? false);
 		const { wrappedPlace, wrappedCancel } = createDryRunWrapper(chainAdapter, log);
 		chainAdapter.placeLimitOrder = wrappedPlace;
 		chainAdapter.cancelOrder = wrappedCancel;
@@ -140,7 +151,7 @@ export async function init() {
 		// Install slippage guard
 		if (config.risk) {
 			const { createSlippageGuard } = await import('../../core/risk/slippageCheck.js');
-			chainAdapter.placeLimitOrder = createSlippageGuard(chainAdapter, config.risk, log, cacheModule.updateRiskStatus);
+			chainAdapter.placeLimitOrder = createSlippageGuard(chainAdapter, config.risk, log, (fields) => cacheModule.updateRiskStatus(BOT_NAME, fields));
 			log.info('RISK', '🛡️ Slippage guard installed', { maxSlippage: `${config.risk.maxAllowedSlippagePercent}%` });
 		}
 
@@ -152,8 +163,8 @@ export async function init() {
 				logger: log,
 				config: config.risk,
 				cacheKey,
-				getSteemDexBotData,
-				updateRiskStatus: cacheModule.updateRiskStatus,
+				getSteemDexBotData: () => getBotData(BOT_NAME),
+				updateRiskStatus: (fields) => cacheModule.updateRiskStatus(BOT_NAME, fields),
 			});
 		}
 
@@ -185,7 +196,7 @@ async function refreshAccountData() {
 			chainAdapter.getOpenOrders(),
 			chainAdapter.getAccountRC(),
 		]);
-		cacheModule.updateAccountData({
+		cacheModule.updateAccountData(BOT_NAME, {
 			account: balances.account,
 			balance: balances.balance,
 			quoteBalance: balances.quoteBalance,
@@ -229,8 +240,8 @@ export async function startDataCollection() {
 	}
 
 	// Start periodic order book snapshots
-	const { saveOrderBookSnapshot } = await import('../../services/storage/steemDexStore.js');
-	const { getLiveOrderBook, updateStorageStats, getSteemDexBotData } = cacheModule;
+	const { saveOrderBookSnapshot } = await import('../../services/storage/botStore.js');
+	const { getLiveOrderBook, updateStorageStats, getBotData: getBotDataFn } = cacheModule;
 	const config = getEffectiveConfig(BOT_NAME);
 	const { chainName } = config;
 	const base = config.baseToken.symbol;
@@ -240,9 +251,9 @@ export async function startDataCollection() {
 		const book = getLiveOrderBook(cacheKey);
 		if (!book?.bids?.length) return;
 
-		saveOrderBookSnapshot(chainName, base, quote, book);
-		const stats = getSteemDexBotData().storageStats;
-		updateStorageStats({
+		saveOrderBookSnapshot(BOT_NAME, chainName, base, quote, book);
+		const stats = getBotDataFn(BOT_NAME).storageStats;
+		updateStorageStats(BOT_NAME, {
 			lastSnapshotTime: new Date().toISOString(),
 			snapshotsToday: (stats.snapshotsToday ?? 0) + 1,
 		});
@@ -322,7 +333,7 @@ export async function startBot() {
 				adapter: chainAdapter,
 				logger: log,
 				config: config.microLayer,
-				updateMicroLayerStatus: cacheModule.updateMicroLayerStatus,
+				updateMicroLayerStatus: (fields) => cacheModule.updateMicroLayerStatus(BOT_NAME, fields),
 			});
 		}
 	}
@@ -346,9 +357,9 @@ export async function startBot() {
 				},
 				cacheKey,
 				cache: {
-					getSteemDexBotData: cacheModule.getSteemDexBotData,
-					updateBrainStatus: cacheModule.updateBrainStatus,
-					updateStrategyStatus: cacheModule.updateStrategyStatus,
+					getSteemDexBotData: () => cacheModule.getBotData(BOT_NAME),
+					updateBrainStatus: (fields) => cacheModule.updateBrainStatus(BOT_NAME, fields),
+					updateStrategyStatus: (fields) => cacheModule.updateStrategyStatus(BOT_NAME, fields),
 				},
 				isStrategyDisabled: (mode) => isStrategyDisabled(BOT_NAME, mode),
 			});
@@ -448,13 +459,21 @@ export async function reloadConfig() {
 	const { setDryRun } = await import('../../core/execution/dryRun.js');
 	const control = getBotControl(BOT_NAME);
 	setDryRun(control.dryRun ?? config.dryRun ?? false);
-	cacheModule?.setDryRunFlag(control.dryRun ?? config.dryRun ?? false);
+	cacheModule?.setDryRunFlag(BOT_NAME, control.dryRun ?? config.dryRun ?? false);
 }
 
 export function isTradingActive() { return tradingActive; }
 export function isDataCollectionActive() { return dataCollectionActive; }
 export function getConfig() { return getEffectiveConfig(BOT_NAME); }
 export function getBotName() { return BOT_NAME; }
+
+export function getStatus() {
+	return {
+		dataCollection: dataCollectionActive,
+		trading: tradingActive,
+		error: null,
+	};
+}
 
 export async function shutdown() {
 	log.info('BOT', '🛑 Shutting down...');

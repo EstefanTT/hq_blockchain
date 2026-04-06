@@ -19,7 +19,7 @@
 //   --csv               Export results to CSV
 
 import '../../services/globalConfig/init.js';
-import { getSnapshotsByDateRange, getTradesByDateRange } from '../../services/storage/steemDexStore.js';
+import { getSnapshotsByDateRange, getTradesByDateRange } from '../../services/storage/botStore.js';
 import { parseArgs, chainDefaults, isoRange, ensureReportsDir, writeCsv } from './shared.js';
 
 import { fileURLToPath } from 'url';
@@ -267,6 +267,7 @@ if (isMainModule) {
 	const args = parseArgs();
 	const { chain, base, quote } = chainDefaults(args);
 	const { since, until } = isoRange(args);
+	const bot = args.bot || 'steem-dex-bot';
 
 	const strategyName = args.strategy;
 	if (!strategyName || !STRATEGIES[strategyName]) {
@@ -285,8 +286,8 @@ if (isMainModule) {
 
 	// ─── Load data ──────────────────────────────────────────────
 
-	const snapshots = getSnapshotsByDateRange(chain, base, quote, since, until);
-	const realTrades = getTradesByDateRange(chain, base, quote, since, until);
+	const snapshots = getSnapshotsByDateRange(bot, chain, base, quote, since, until);
+	const realTrades = getTradesByDateRange(bot, chain, base, quote, since, until);
 
 	console.log(`  📸 Snapshots loaded: ${snapshots.length}`);
 	console.log(`  🔄 Real trades loaded: ${realTrades.length}`);

@@ -4,14 +4,18 @@
 
 import auth from '../../middlewares/auth.js';
 
-export default [auth, async function handler(_req, res) {
+export default [auth, async function handler(req, res) {
 	try {
 		const { isBrainRunning, forceMode } = await import('../../../strategies/engine/brain.js');
 
 		if (!isBrainRunning()) {
-			// Brain not running — try direct emergencyStop
-			const { emergencyStop } = await import('../../../apps/steem-dex-bot/index.js');
-			await emergencyStop();
+			// Brain not running — try direct emergencyStop on all bots
+			const { listBots, getBotModule } = await import('../../../services/botRegistry/index.js');
+			for (const { name } of listBots()) {
+				const mod = getBotModule(name);
+				if (mod.emergencyStop) await mod.emergencyStop();
+				else await mod.stopBot();
+			}
 			return res.json({ ok: true, action: 'emergency_stop', message: 'Trading stopped (brain was not running)' });
 		}
 
