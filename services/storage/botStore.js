@@ -18,12 +18,12 @@ const SNAPSHOT_TOP_N = 20; // Store top 20 bids + top 20 asks per snapshot
 // ####################################################################################################################################
 
 function ensureTables() {
-if (initialized) return;
+	if (initialized) return;
 
-const db = getDb();
+	const db = getDb();
 
-// Create tables (without botName-dependent indexes — migration adds those)
-db.exec(`
+	// Create tables (without botName-dependent indexes — migration adds those)
+	db.exec(`
 CREATE TABLE IF NOT EXISTS order_book_snapshots (
 id            INTEGER PRIMARY KEY AUTOINCREMENT,
 botName       TEXT    NOT NULL DEFAULT 'steem-dex-bot',
@@ -78,10 +78,10 @@ strategy  TEXT
 );
 `);
 
-// Run migration (adds botName column to legacy tables), then create indexes
-migrate(db);
+	// Run migration (adds botName column to legacy tables), then create indexes
+	migrate(db);
 
-db.exec(`
+	db.exec(`
 CREATE INDEX IF NOT EXISTS idx_obs_bot_chain_pair_ts
 ON order_book_snapshots (botName, chainName, baseToken, quoteToken, timestamp);
 
@@ -92,8 +92,8 @@ CREATE INDEX IF NOT EXISTS idx_al_bot_chain_event_ts
 ON analysis_log (botName, chainName, eventType, timestamp);
 `);
 
-initialized = true;
-console.info('DB', 'BOT-STORE', 'Tables initialized (order_book_snapshots, trades_history, bot_positions, analysis_log)');
+	initialized = true;
+	console.info('DB', 'BOT-STORE', 'Tables initialized (order_book_snapshots, trades_history, bot_positions, analysis_log)');
 }
 
 // ####################################################################################################################################
@@ -101,25 +101,25 @@ console.info('DB', 'BOT-STORE', 'Tables initialized (order_book_snapshots, trade
 // ####################################################################################################################################
 
 function migrate(db) {
-// Check if legacy tables exist without botName column
-const columns = db.pragma('table_info(order_book_snapshots)');
-if (!columns.length) return; // fresh db, CREATE above handled it
-const hasBotName = columns.some(c => c.name === 'botName');
+	// Check if legacy tables exist without botName column
+	const columns = db.pragma('table_info(order_book_snapshots)');
+	if (!columns.length) return; // fresh db, CREATE above handled it
+	const hasBotName = columns.some(c => c.name === 'botName');
 
-if (!hasBotName) {
-console.info('DB', 'BOT-STORE', 'Running migration: adding botName column to all tables');
+	if (!hasBotName) {
+		console.info('DB', 'BOT-STORE', 'Running migration: adding botName column to all tables');
 
-db.exec(`
+		db.exec(`
 ALTER TABLE order_book_snapshots ADD COLUMN botName TEXT NOT NULL DEFAULT 'steem-dex-bot';
 ALTER TABLE analysis_log ADD COLUMN botName TEXT NOT NULL DEFAULT 'steem-dex-bot';
 `);
-}
+	}
 
-// trades_history: ensure UNIQUE constraint includes botName (recreate if needed)
-const thSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='trades_history'").get()?.sql || '';
-if (!thSql.includes('UNIQUE(botName')) {
-console.info('DB', 'BOT-STORE', 'Recreating trades_history with botName in UNIQUE constraint');
-db.exec(`
+	// trades_history: ensure UNIQUE constraint includes botName (recreate if needed)
+	const thSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='trades_history'").get()?.sql || '';
+	if (!thSql.includes('UNIQUE(botName')) {
+		console.info('DB', 'BOT-STORE', 'Recreating trades_history with botName in UNIQUE constraint');
+		db.exec(`
 CREATE TABLE trades_history_new (
 id          INTEGER PRIMARY KEY AUTOINCREMENT,
 botName     TEXT    NOT NULL DEFAULT 'steem-dex-bot',
@@ -141,13 +141,13 @@ FROM trades_history;
 DROP TABLE trades_history;
 ALTER TABLE trades_history_new RENAME TO trades_history;
 `);
-}
+	}
 
-// bot_positions: ensure PK includes botName (recreate if needed)
-const bpSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='bot_positions'").get()?.sql || '';
-if (!bpSql.includes('botName')) {
-console.info('DB', 'BOT-STORE', 'Recreating bot_positions with botName in PK');
-db.exec(`
+	// bot_positions: ensure PK includes botName (recreate if needed)
+	const bpSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='bot_positions'").get()?.sql || '';
+	if (!bpSql.includes('botName')) {
+		console.info('DB', 'BOT-STORE', 'Recreating bot_positions with botName in PK');
+		db.exec(`
 CREATE TABLE bot_positions_new (
 botName           TEXT NOT NULL,
 chainName         TEXT NOT NULL,
@@ -165,10 +165,10 @@ FROM bot_positions;
 DROP TABLE bot_positions;
 ALTER TABLE bot_positions_new RENAME TO bot_positions;
 `);
-}
+	}
 
-// Recreate indexes to include botName
-db.exec(`
+	// Recreate indexes to include botName
+	db.exec(`
 DROP INDEX IF EXISTS idx_obs_chain_pair_ts;
 CREATE INDEX IF NOT EXISTS idx_obs_bot_chain_pair_ts ON order_book_snapshots (botName, chainName, baseToken, quoteToken, timestamp);
 
@@ -179,7 +179,7 @@ DROP INDEX IF EXISTS idx_al_chain_event_ts;
 CREATE INDEX IF NOT EXISTS idx_al_bot_chain_event_ts ON analysis_log (botName, chainName, eventType, timestamp);
 `);
 
-console.info('DB', 'BOT-STORE', 'Migration complete — botName column added to all tables');
+	console.info('DB', 'BOT-STORE', 'Migration complete — botName column added to all tables');
 }
 
 // ####################################################################################################################################
@@ -191,19 +191,19 @@ console.info('DB', 'BOT-STORE', 'Migration complete — botName column added to 
 let _stmts = null;
 
 function stmts() {
-if (_stmts) return _stmts;
+	if (_stmts) return _stmts;
 
-const db = getDb();
-_stmts = {
-insertSnapshot: db.prepare(`
+	const db = getDb();
+	_stmts = {
+		insertSnapshot: db.prepare(`
 INSERT INTO order_book_snapshots (botName, timestamp, chainName, baseToken, quoteToken, bids, asks, midPrice, spreadPercent)
 VALUES (@botName, @timestamp, @chainName, @baseToken, @quoteToken, @bids, @asks, @midPrice, @spreadPercent)
 `),
-insertTrade: db.prepare(`
+		insertTrade: db.prepare(`
 INSERT OR IGNORE INTO trades_history (botName, timestamp, chainName, baseToken, quoteToken, tradeId, price, amountBase, amountQuote, type, txId)
 VALUES (@botName, @timestamp, @chainName, @baseToken, @quoteToken, @tradeId, @price, @amountBase, @amountQuote, @type, @txId)
 `),
-upsertPosition: db.prepare(`
+		upsertPosition: db.prepare(`
 INSERT INTO bot_positions (botName, chainName, baseToken, quoteToken, baseBalance, quoteBalance, lastUpdated, averageEntryPrice)
 VALUES (@botName, @chainName, @baseToken, @quoteToken, @baseBalance, @quoteBalance, @lastUpdated, @averageEntryPrice)
 ON CONFLICT(botName, chainName, baseToken, quoteToken) DO UPDATE SET
@@ -212,186 +212,186 @@ quoteBalance      = @quoteBalance,
 lastUpdated       = @lastUpdated,
 averageEntryPrice = @averageEntryPrice
 `),
-insertAnalysis: db.prepare(`
+		insertAnalysis: db.prepare(`
 INSERT INTO analysis_log (botName, timestamp, chainName, eventType, severity, message, data, strategy)
 VALUES (@botName, @timestamp, @chainName, @eventType, @severity, @message, @data, @strategy)
 `),
-selectSnapshots: db.prepare(`
+		selectSnapshots: db.prepare(`
 SELECT * FROM order_book_snapshots
 WHERE botName = @botName AND chainName = @chainName AND baseToken = @baseToken AND quoteToken = @quoteToken
 ORDER BY timestamp DESC LIMIT @limit
 `),
-selectTrades: db.prepare(`
+		selectTrades: db.prepare(`
 SELECT * FROM trades_history
 WHERE botName = @botName AND chainName = @chainName AND baseToken = @baseToken AND quoteToken = @quoteToken
 ORDER BY timestamp DESC LIMIT @limit
 `),
-selectPosition: db.prepare(`
+		selectPosition: db.prepare(`
 SELECT * FROM bot_positions
 WHERE botName = @botName AND chainName = @chainName AND baseToken = @baseToken AND quoteToken = @quoteToken
 `),
-countTradesToday: db.prepare(`
+		countTradesToday: db.prepare(`
 SELECT COUNT(*) as count FROM trades_history
 WHERE botName = @botName AND chainName = @chainName AND baseToken = @baseToken AND quoteToken = @quoteToken
 AND timestamp >= @todayStart
 `),
-selectRecentAnalysis: db.prepare(`
+		selectRecentAnalysis: db.prepare(`
 SELECT id, timestamp, botName, chainName, eventType, severity, message, data, strategy
 FROM analysis_log
 WHERE botName = @botName AND chainName = @chainName
 ORDER BY id DESC LIMIT @limit
 `),
-};
+	};
 
-return _stmts;
+	return _stmts;
 }
 
 // --- Writes ---
 
 export function saveOrderBookSnapshot(botName, chainName, baseToken, quoteToken, book) {
-ensureTables();
+	ensureTables();
 
-if (!book?.bids?.length && !book?.asks?.length) return;
+	if (!book?.bids?.length && !book?.asks?.length) return;
 
-const row = {
-botName,
-timestamp: new Date().toISOString(),
-chainName,
-baseToken,
-quoteToken,
-bids: JSON.stringify((book.bids || []).slice(0, SNAPSHOT_TOP_N)),
-asks: JSON.stringify((book.asks || []).slice(0, SNAPSHOT_TOP_N)),
-midPrice: book.midPrice ?? null,
-spreadPercent: book.spreadPercent ?? null,
-};
+	const row = {
+		botName,
+		timestamp: new Date().toISOString(),
+		chainName,
+		baseToken,
+		quoteToken,
+		bids: JSON.stringify((book.bids || []).slice(0, SNAPSHOT_TOP_N)),
+		asks: JSON.stringify((book.asks || []).slice(0, SNAPSHOT_TOP_N)),
+		midPrice: book.midPrice ?? null,
+		spreadPercent: book.spreadPercent ?? null,
+	};
 
-stmts().insertSnapshot.run(row);
-console.info('DB', chainName.toUpperCase(), 'Snapshot saved (mid: ' + (row.midPrice?.toFixed(4) ?? '-') + ')');
-return row;
+	stmts().insertSnapshot.run(row);
+	console.info('DB', chainName.toUpperCase(), 'Snapshot saved (mid: ' + (row.midPrice?.toFixed(4) ?? '-') + ')');
+	return row;
 }
 
 export function addTrade(botName, chainName, baseToken, quoteToken, trade) {
-ensureTables();
+	ensureTables();
 
-const row = {
-botName,
-timestamp: trade.timestamp ?? new Date().toISOString(),
-chainName,
-baseToken,
-quoteToken,
-tradeId: trade.id,
-price: trade.price,
-amountBase: trade.amountBase,
-amountQuote: trade.amountQuote,
-type: trade.type?.toUpperCase() ?? 'UNKNOWN',
-txId: trade.txId ?? null,
-};
+	const row = {
+		botName,
+		timestamp: trade.timestamp ?? new Date().toISOString(),
+		chainName,
+		baseToken,
+		quoteToken,
+		tradeId: trade.id,
+		price: trade.price,
+		amountBase: trade.amountBase,
+		amountQuote: trade.amountQuote,
+		type: trade.type?.toUpperCase() ?? 'UNKNOWN',
+		txId: trade.txId ?? null,
+	};
 
-const result = stmts().insertTrade.run(row);
-return result.changes;
+	const result = stmts().insertTrade.run(row);
+	return result.changes;
 }
 
 export function addTrades(botName, chainName, baseToken, quoteToken, trades) {
-ensureTables();
+	ensureTables();
 
-if (!trades?.length) return 0;
+	if (!trades?.length) return 0;
 
-const db = getDb();
-let inserted = 0;
+	const db = getDb();
+	let inserted = 0;
 
-const runBatch = db.transaction(() => {
-for (const trade of trades) {
-inserted += addTrade(botName, chainName, baseToken, quoteToken, trade);
-}
-});
+	const runBatch = db.transaction(() => {
+		for (const trade of trades) {
+			inserted += addTrade(botName, chainName, baseToken, quoteToken, trade);
+		}
+	});
 
-runBatch();
+	runBatch();
 
-if (inserted > 0) {
-console.info('DB', chainName.toUpperCase(), inserted + ' new trade(s) persisted');
-}
+	if (inserted > 0) {
+		console.info('DB', chainName.toUpperCase(), inserted + ' new trade(s) persisted');
+	}
 
-return inserted;
+	return inserted;
 }
 
 export function updatePosition(botName, chainName, baseToken, quoteToken, balances) {
-ensureTables();
+	ensureTables();
 
-const row = {
-botName,
-chainName,
-baseToken,
-quoteToken,
-baseBalance: balances.baseBalance ?? 0,
-quoteBalance: balances.quoteBalance ?? 0,
-lastUpdated: new Date().toISOString(),
-averageEntryPrice: balances.averageEntryPrice ?? 0,
-};
+	const row = {
+		botName,
+		chainName,
+		baseToken,
+		quoteToken,
+		baseBalance: balances.baseBalance ?? 0,
+		quoteBalance: balances.quoteBalance ?? 0,
+		lastUpdated: new Date().toISOString(),
+		averageEntryPrice: balances.averageEntryPrice ?? 0,
+	};
 
-stmts().upsertPosition.run(row);
-console.info('DB', chainName.toUpperCase(), 'Position updated (' + baseToken + ': ' + row.baseBalance + ', ' + quoteToken + ': ' + row.quoteBalance + ')');
-return row;
+	stmts().upsertPosition.run(row);
+	console.info('DB', chainName.toUpperCase(), 'Position updated (' + baseToken + ': ' + row.baseBalance + ', ' + quoteToken + ': ' + row.quoteBalance + ')');
+	return row;
 }
 
 export function logAnalysisEvent(botName, event) {
-ensureTables();
+	ensureTables();
 
-const row = {
-botName,
-timestamp: event.timestamp ?? new Date().toISOString(),
-chainName: event.chainName,
-eventType: event.eventType,
-severity: event.severity ?? 'INFO',
-message: event.message,
-data: event.data ? JSON.stringify(event.data) : null,
-strategy: event.strategy ?? null,
-};
+	const row = {
+		botName,
+		timestamp: event.timestamp ?? new Date().toISOString(),
+		chainName: event.chainName,
+		eventType: event.eventType,
+		severity: event.severity ?? 'INFO',
+		message: event.message,
+		data: event.data ? JSON.stringify(event.data) : null,
+		strategy: event.strategy ?? null,
+	};
 
-stmts().insertAnalysis.run(row);
+	stmts().insertAnalysis.run(row);
 }
 
 // --- Reads ---
 
 export function getRecentSnapshots(botName, chainName, baseToken, quoteToken, limit = 10) {
-ensureTables();
+	ensureTables();
 
-const rows = stmts().selectSnapshots.all({ botName, chainName, baseToken, quoteToken, limit });
-return rows.map(r => ({
-...r,
-bids: JSON.parse(r.bids),
-asks: JSON.parse(r.asks),
-}));
+	const rows = stmts().selectSnapshots.all({ botName, chainName, baseToken, quoteToken, limit });
+	return rows.map(r => ({
+		...r,
+		bids: JSON.parse(r.bids),
+		asks: JSON.parse(r.asks),
+	}));
 }
 
 export function getTradeHistory(botName, chainName, baseToken, quoteToken, limit = 50) {
-ensureTables();
-return stmts().selectTrades.all({ botName, chainName, baseToken, quoteToken, limit });
+	ensureTables();
+	return stmts().selectTrades.all({ botName, chainName, baseToken, quoteToken, limit });
 }
 
 export function getCurrentPosition(botName, chainName, baseToken, quoteToken) {
-ensureTables();
-return stmts().selectPosition.get({ botName, chainName, baseToken, quoteToken }) ?? null;
+	ensureTables();
+	return stmts().selectPosition.get({ botName, chainName, baseToken, quoteToken }) ?? null;
 }
 
 export function getRecentAnalysisLogs(botName, chainName, limit = 10) {
-ensureTables();
-return stmts().selectRecentAnalysis.all({ botName, chainName, limit });
+	ensureTables();
+	return stmts().selectRecentAnalysis.all({ botName, chainName, limit });
 }
 
 export function countTradesToday(botName, chainName, baseToken, quoteToken) {
-ensureTables();
-const todayStart = new Date();
-todayStart.setUTCHours(0, 0, 0, 0);
-const row = stmts().countTradesToday.get({ botName, chainName, baseToken, quoteToken, todayStart: todayStart.toISOString() });
-return row?.count ?? 0;
+	ensureTables();
+	const todayStart = new Date();
+	todayStart.setUTCHours(0, 0, 0, 0);
+	const row = stmts().countTradesToday.get({ botName, chainName, baseToken, quoteToken, todayStart: todayStart.toISOString() });
+	return row?.count ?? 0;
 }
 
 // --- Date-range reads (analysis scripts) ---
 
 export function getAnalysisLogsByDateRange(botName, chainName, since, until) {
-ensureTables();
-const db = getDb();
-return db.prepare(`
+	ensureTables();
+	const db = getDb();
+	return db.prepare(`
 SELECT id, timestamp, botName, chainName, eventType, severity, message, data, strategy
 FROM analysis_log
 WHERE botName = @botName AND chainName = @chainName AND timestamp >= @since AND timestamp <= @until
@@ -400,46 +400,46 @@ ORDER BY timestamp ASC
 }
 
 export function getAnalysisLogsPaginated(botName, chainName, opts) {
-ensureTables();
-const db = getDb();
-const { limit: rawLimit = 50, beforeId = null, eventType = null, severity = null, search = null } = opts || {};
-const limit = rawLimit;
+	ensureTables();
+	const db = getDb();
+	const { limit: rawLimit = 50, beforeId = null, eventType = null, severity = null, search = null } = opts || {};
+	const limit = rawLimit;
 
-let sql = 'SELECT id, timestamp, botName, chainName, eventType, severity, message, data, strategy FROM analysis_log WHERE botName = @botName AND chainName = @chainName';
-const params = { botName, chainName, limit };
+	let sql = 'SELECT id, timestamp, botName, chainName, eventType, severity, message, data, strategy FROM analysis_log WHERE botName = @botName AND chainName = @chainName';
+	const params = { botName, chainName, limit };
 
-if (beforeId) { sql += ' AND id < @beforeId'; params.beforeId = beforeId; }
-if (eventType) { sql += ' AND eventType = @eventType'; params.eventType = eventType; }
-if (severity) { sql += ' AND severity = @severity'; params.severity = severity; }
-if (search) { sql += ' AND message LIKE @search'; params.search = '%' + search + '%'; }
+	if (beforeId) { sql += ' AND id < @beforeId'; params.beforeId = beforeId; }
+	if (eventType) { sql += ' AND eventType = @eventType'; params.eventType = eventType; }
+	if (severity) { sql += ' AND severity = @severity'; params.severity = severity; }
+	if (search) { sql += ' AND message LIKE @search'; params.search = '%' + search + '%'; }
 
-sql += ' ORDER BY id DESC LIMIT @limit';
-return db.prepare(sql).all(params);
+	sql += ' ORDER BY id DESC LIMIT @limit';
+	return db.prepare(sql).all(params);
 }
 
 export function getDistinctEventTypes(botName, chainName) {
-ensureTables();
-const db = getDb();
-return db.prepare('SELECT DISTINCT eventType FROM analysis_log WHERE botName = @botName AND chainName = @chainName ORDER BY eventType')
-.all({ botName, chainName }).map(r => r.eventType);
+	ensureTables();
+	const db = getDb();
+	return db.prepare('SELECT DISTINCT eventType FROM analysis_log WHERE botName = @botName AND chainName = @chainName ORDER BY eventType')
+		.all({ botName, chainName }).map(r => r.eventType);
 }
 
 export function getSnapshotsByDateRange(botName, chainName, baseToken, quoteToken, since, until) {
-ensureTables();
-const db = getDb();
-const rows = db.prepare(`
+	ensureTables();
+	const db = getDb();
+	const rows = db.prepare(`
 SELECT * FROM order_book_snapshots
 WHERE botName = @botName AND chainName = @chainName AND baseToken = @baseToken AND quoteToken = @quoteToken
       AND timestamp >= @since AND timestamp <= @until
 ORDER BY timestamp ASC
 `).all({ botName, chainName, baseToken, quoteToken, since, until });
-return rows.map(r => ({ ...r, bids: JSON.parse(r.bids), asks: JSON.parse(r.asks) }));
+	return rows.map(r => ({ ...r, bids: JSON.parse(r.bids), asks: JSON.parse(r.asks) }));
 }
 
 export function getTradesByDateRange(botName, chainName, baseToken, quoteToken, since, until) {
-ensureTables();
-const db = getDb();
-return db.prepare(`
+	ensureTables();
+	const db = getDb();
+	return db.prepare(`
 SELECT * FROM trades_history
 WHERE botName = @botName AND chainName = @chainName AND baseToken = @baseToken AND quoteToken = @quoteToken
       AND timestamp >= @since AND timestamp <= @until
@@ -450,14 +450,14 @@ ORDER BY timestamp ASC
 // --- Cross-bot aggregates ---
 
 export function countAllTradesToday() {
-ensureTables();
-const db = getDb();
-const today = new Date().toISOString().slice(0, 10);
-return db.prepare('SELECT COUNT(*) as count FROM trades_history WHERE timestamp >= ?').get(today + 'T00:00:00Z').count;
+	ensureTables();
+	const db = getDb();
+	const today = new Date().toISOString().slice(0, 10);
+	return db.prepare('SELECT COUNT(*) as count FROM trades_history WHERE timestamp >= ?').get(today + 'T00:00:00Z').count;
 }
 
 export function getAllBotPositions() {
-ensureTables();
-const db = getDb();
-return db.prepare('SELECT * FROM bot_positions').all();
+	ensureTables();
+	const db = getDb();
+	return db.prepare('SELECT * FROM bot_positions').all();
 }

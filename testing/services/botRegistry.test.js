@@ -21,12 +21,12 @@ function makeMeta(overrides = {}) {
 
 function makeModule(overrides = {}) {
 	return {
-		init: async () => {},
-		startDataCollection: async () => {},
-		stopDataCollection: async () => {},
-		startBot: async () => {},
-		stopBot: async () => {},
-		shutdown: async () => {},
+		init: async () => { },
+		startDataCollection: async () => { },
+		stopDataCollection: async () => { },
+		startBot: async () => { },
+		stopBot: async () => { },
+		shutdown: async () => { },
 		getStatus: () => ({ dataCollection: false, trading: false, error: null }),
 		...overrides,
 	};
