@@ -20,9 +20,9 @@ export function renderSidebar(activePage = 'home') {
 	const disabled = 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#3a4260] text-sm cursor-not-allowed select-none';
 
 	const categories = {
-		trading:    { label: 'Trading Bots', icon: '🤖' },
-		monitoring: { label: 'Monitoring',   icon: '📊' },
-		analysis:   { label: 'Analysis',     icon: '🔬' },
+		trading: { label: 'Trading Bots', icon: '🤖' },
+		monitoring: { label: 'Monitoring', icon: '📊' },
+		analysis: { label: 'Analysis', icon: '🔬' },
 	};
 
 	// Group bots by category
