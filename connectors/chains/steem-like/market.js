@@ -8,6 +8,7 @@ import {
 	setLiveOrderBook,
 	addRecentTrades,
 	updatePriceFeed,
+	runtimeCache,
 } from '../../../services/cache/index.js';
 
 const POLL_INTERVAL_MS = 3_000;
@@ -93,9 +94,12 @@ export class MarketPoller {
 		// Cache the normalized book
 		setLiveOrderBook(this.cacheKey, book);
 
-		// Also push DEX mid-price into the price feed cache
+		// Also push DEX mid-price into the price feed cache (converted to USD)
 		if (book.midPrice) {
-			updatePriceFeed(this.baseSymbol, 'dex', book.midPrice);
+			const quoteFeed = runtimeCache.priceFeeds[this.quoteSymbol];
+			const quoteUsd = quoteFeed?.cg?.usd ?? quoteFeed?.cmc?.usd ?? null;
+			const dexUsd = quoteUsd ? book.midPrice * quoteUsd : book.midPrice;
+			updatePriceFeed(this.baseSymbol, 'dex', dexUsd);
 		}
 
 		// First-fetch log

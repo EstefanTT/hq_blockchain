@@ -31,6 +31,8 @@ export const meta = {
 	chain: 'chain-name',             // e.g. 'steem', 'ethereum', 'solana'
 	pairs: ['TOKEN_A/TOKEN_B'],      // Trading pairs
 	description: 'One-line description of what this bot does.',
+	category: 'trading',             // 'trading' | 'monitoring' | 'analysis'
+	ready: false,                    // Set to true once the bot is fully implemented
 };
 
 // ─── STATE ──────────────────────────────────────────────────────────

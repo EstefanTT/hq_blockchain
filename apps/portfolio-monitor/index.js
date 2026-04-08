@@ -7,6 +7,8 @@ export const meta = {
 	chain: 'ethereum',
 	pairs: [],
 	description: 'Tracks wallet balances and portfolio positions across all chains',
+	category: 'monitoring',
+	ready: false,
 };
 
 let dataActive = false;

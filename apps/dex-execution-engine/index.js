@@ -7,6 +7,8 @@ export const meta = {
 	chain: 'ethereum',
 	pairs: [],
 	description: 'Routes trade intents through core/execution for on-chain DEX execution',
+	category: 'trading',
+	ready: false,
 };
 
 let dataActive = false;

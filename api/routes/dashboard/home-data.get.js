@@ -6,7 +6,7 @@ import auth from '../../middlewares/auth.js';
 
 export default [auth, async function handler(_req, res) {
 	try {
-		const { getBotData } = await import('../../../services/cache/index.js');
+		const { getBotData, getAppSizeInfo } = await import('../../../services/cache/index.js');
 		const { isKilled } = await import('../../../core/risk/killSwitch.js');
 		const { getBotControl, getEffectiveConfig } = await import('../../../services/dynamicConfig/index.js');
 		const { isDryRunEnabled } = await import('../../../core/execution/dryRun.js');
@@ -26,6 +26,9 @@ export default [auth, async function handler(_req, res) {
 				label: botMeta.displayName,
 				chain: botMeta.chain,
 				pair: botMeta.pairs.join(' / '),
+				category: botMeta.category || 'trading',
+				ready: botMeta.ready !== false,
+				description: botMeta.description || '',
 				enabled: status.trading,
 				dataCollection: status.dataCollection,
 				dryRun: control.dryRun,
@@ -47,10 +50,10 @@ export default [auth, async function handler(_req, res) {
 			return bot;
 		});
 
-		// Overview data (from primary bot for now)
+		// Overview data
 		const botData = getBotData('steem-dex-bot');
 		const overview = {
-			appSizeInfo: botData?.appSizeInfo ?? {},
+			appSizeInfo: getAppSizeInfo(),
 			storageStats: botData?.storageStats ?? {},
 		};
 

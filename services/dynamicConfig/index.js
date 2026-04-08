@@ -53,10 +53,17 @@ export function registerStaticConfig(botName, config) {
 	}
 
 	// Load control state from disk
+	// enabled + dataCollection always start OFF regardless of persisted state;
+	// dryRun and disabledStrategies are preferences and are preserved across restarts.
 	const ctrlPath = controlFilePath(botName);
 	if (fs.existsSync(ctrlPath)) {
 		try {
-			botControl[botName] = JSON.parse(fs.readFileSync(ctrlPath, 'utf-8'));
+			const persisted = JSON.parse(fs.readFileSync(ctrlPath, 'utf-8'));
+			botControl[botName] = {
+				...persisted,
+				enabled: false,
+				dataCollection: false,
+			};
 		} catch {
 			botControl[botName] = { enabled: false, dryRun: false, dataCollection: false, disabledStrategies: [] };
 		}

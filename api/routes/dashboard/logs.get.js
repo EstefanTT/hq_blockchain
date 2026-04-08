@@ -30,6 +30,9 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 	.nav-item { transition: all 0.15s; }
 	.nav-active { background: rgba(74,142,255,0.15); color: #4a8eff; border-left: 3px solid #4a8eff; }
 	.nav-inactive:hover { background: rgba(255,255,255,0.04); }
+	.nav-category-items { overflow: hidden; transition: max-height 0.2s ease; max-height: 500px; }
+	.nav-category.collapsed .nav-category-items { max-height: 0; }
+	.nav-category.collapsed .nav-chevron { transform: rotate(-90deg); }
 	.sev-INFO { color: #60a5fa; } .sev-WARN { color: #fbbf24; } .sev-ERROR { color: #f87171; } .sev-DEBUG { color: #a78bfa; }
 	.log-row { transition: background 0.1s; }
 	.log-row:hover { background: rgba(74,142,255,0.05); }
@@ -58,8 +61,6 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 				<h1 class="text-lg font-bold text-white">📋 Logs Explorer</h1>
 				<span id="log-count" class="text-[11px] text-[#6b7994]"></span>
 			</div>
-			<input id="token" type="password" placeholder="🔑 API Token"
-				class="bg-[#111936] border border-[#1a2555] rounded-lg px-3 py-1.5 text-xs w-40 focus:border-[#4a8eff] focus:outline-none focus:ring-1 focus:ring-[#4a8eff]/30 placeholder-[#3a4260] transition-colors" />
 		</div>
 	</header>
 
@@ -118,7 +119,7 @@ let allLogs = [];
 let nextBeforeId = null;
 let hasMore = false;
 
-function token() { return document.getElementById('token').value.trim(); }
+function token() { return (localStorage.getItem('hq_api_token') || '').trim(); }
 
 async function apiFetch(path) {
 	const headers = {};
@@ -199,12 +200,6 @@ function resetFilters() {
 }
 
 // Init
-const savedToken = localStorage.getItem('hq_api_token');
-if (savedToken) document.getElementById('token').value = savedToken;
-document.getElementById('token').addEventListener('change', (e) => {
-	localStorage.setItem('hq_api_token', e.target.value);
-	loadLogs(true);
-});
 document.getElementById('fil-search').addEventListener('keydown', (e) => {
 	if (e.key === 'Enter') loadLogs(true);
 });

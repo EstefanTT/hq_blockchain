@@ -7,6 +7,8 @@ export const meta = {
 	chain: 'ethereum',
 	pairs: [],
 	description: 'Captures cross-venue spreads on DEXes and CEXes',
+	category: 'trading',
+	ready: false,
 };
 
 let dataActive = false;

@@ -7,6 +7,8 @@ export const meta = {
 	chain: 'ethereum',
 	pairs: [],
 	description: 'Monitors wallet movements, token flows, and new pair detection on-chain',
+	category: 'analysis',
+	ready: false,
 };
 
 let dataActive = false;

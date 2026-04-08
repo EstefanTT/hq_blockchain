@@ -54,6 +54,9 @@ function buildPage({ botName, meta, sidebar, baseToken, quoteToken, cacheKey }) 
 	.nav-item { transition: all 0.15s; }
 	.nav-active { background: rgba(74,142,255,0.15); color: #4a8eff; border-left: 3px solid #4a8eff; }
 	.nav-inactive:hover { background: rgba(255,255,255,0.04); }
+	.nav-category-items { overflow: hidden; transition: max-height 0.2s ease; max-height: 500px; }
+	.nav-category.collapsed .nav-category-items { max-height: 0; }
+	.nav-category.collapsed .nav-chevron { transform: rotate(-90deg); }
 	.fade-in { animation: fadeIn 0.3s ease-in; }
 	@keyframes fadeIn { from { opacity: 0.5; } to { opacity: 1; } }
 	.kpi-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
@@ -96,8 +99,6 @@ ${sidebar}
 				<span id="status-dot" class="status-dot bg-gray-600" title="Connection status"></span>
 			</div>
 			<div class="flex items-center gap-4">
-				<input id="token" type="password" placeholder="🔑 API Token"
-					class="bg-[#111936] border border-[#1a2555] rounded-lg px-3 py-1.5 text-xs w-40 focus:border-[#4a8eff] focus:outline-none focus:ring-1 focus:ring-[#4a8eff]/30 placeholder-[#3a4260] transition-colors" />
 				<label class="flex items-center gap-2">
 					<label class="toggle toggle-sm" title="Data Collection">
 						<input id="chk-data" type="checkbox" onchange="toggleData(this.checked)" />
@@ -114,7 +115,7 @@ ${sidebar}
 						<span class="toggle-knob"></span>
 					</label>
 					<span class="text-xs text-[#6b7994]">Dry-Run</span>
-					<span id="dryrun-badge" class="hidden px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] rounded-full font-bold">DRY</span>
+					<span id="dryrun-badge" class="px-2 py-0.5 bg-[#1a2555] text-[#6b7994] text-[10px] rounded-full font-bold">OFF</span>
 				</label>
 				<button onclick="emergencyPause()"
 					class="bg-red-600/90 hover:bg-red-500 px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-lg shadow-red-600/20">
@@ -166,7 +167,12 @@ ${sidebar}
 		<div id="no-token-msg" class="hidden card rounded-xl p-8 text-center">
 			<div class="text-4xl mb-3">🔑</div>
 			<div class="text-white font-semibold mb-1">Enter API Token</div>
-			<div class="text-[#6b7994] text-sm">Enter your API token in the top-right field to load bot data.</div>
+			<div class="text-[#6b7994] text-sm mb-3">Provide your API token to load bot data.</div>
+			<div class="flex items-center justify-center gap-2">
+				<input id="token-entry" type="password" placeholder="Paste token here"
+					class="bg-[#111936] border border-[#1a2555] rounded-lg px-3 py-1.5 text-xs w-56 focus:border-[#4a8eff] focus:outline-none focus:ring-1 focus:ring-[#4a8eff]/30 placeholder-[#3a4260] transition-colors" />
+				<button onclick="saveToken()" class="bg-[#4a8eff] hover:bg-[#5a9aff] text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-colors">Save</button>
+			</div>
 		</div>
 
 		<!-- ─── KPI Row ────────────────────────────── -->
@@ -345,6 +351,7 @@ var KNOWN = {
 	meanReversion: { key: 'mean-reversion', icon: '🔄', color: '#a855f7', desc: 'Bets on price snapping back after a sharp move away from the mean.' },
 	defensivePause: { key: 'defensive', icon: '🛡️', color: '#6b7280', desc: 'Pauses trading when conditions are unfavorable (thin book, low RC, high volatility).' },
 	botExploitation: { key: 'bot-exploitation', icon: '🕵️', color: '#eab308', desc: 'Detects and exploits predictable bot behavior patterns in the order book.' },
+	microLayer: { key: 'micro-layer', icon: '🔹', color: '#0ea5e9', desc: 'Places multiple small orders at increasing distances from mid-price with growing size multipliers.' },
 };
 var FALLBACK_ICONS = ['💎', '⚡', '🔥', '🎲', '📐', '🧩'];
 var FALLBACK_COLORS = ['#ec4899', '#14b8a6', '#f43f5e', '#8b5cf6', '#22d3ee', '#84cc16'];
@@ -361,17 +368,32 @@ function discoverStrategies(config) {
 			var stratKey = known ? known.key : configKey.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
 			var label = configKey === 'defensivePause' ? 'Defensive / Pause'
 				: configKey.replace(/([A-Z])/g, ' $1').replace(/^./, function(s) { return s.toUpperCase(); }).trim();
-			var params = Object.entries(val)
-				.filter(function(pe) { return pe[0] !== 'enabled' && (typeof pe[1] === 'number' || typeof pe[1] === 'string' || typeof pe[1] === 'boolean'); })
-				.map(function(pe) {
-					var pk = pe[0], pv = pe[1];
-					return {
+			var params = [];
+			Object.entries(val).forEach(function(pe) {
+				var pk = pe[0], pv = pe[1];
+				if (pk === 'enabled') return;
+				if (typeof pv === 'number' || typeof pv === 'string' || typeof pv === 'boolean') {
+					params.push({
 						key: pk,
 						label: pk.replace(/([A-Z])/g, ' $1').replace(/^./, function(s) { return s.toUpperCase(); }).trim(),
 						type: typeof pv === 'number' ? 'number' : 'text',
 						step: typeof pv === 'number' ? (Math.abs(pv) < 1 ? 0.01 : Math.abs(pv) < 100 ? 1 : 10) : undefined,
-					};
-				});
+					});
+				} else if (Array.isArray(pv) && pv.length && typeof pv[0] === 'object') {
+					pv.forEach(function(item, i) {
+						Object.entries(item).forEach(function(ie) {
+							var ik = ie[0], iv = ie[1];
+							if (typeof iv !== 'number' && typeof iv !== 'string') return;
+							params.push({
+								key: pk + '[' + i + '].' + ik,
+								label: 'Lvl ' + (i + 1) + ' ' + ik.replace(/([A-Z])/g, ' $1').replace(/^./, function(s) { return s.toUpperCase(); }).trim(),
+								type: typeof iv === 'number' ? 'number' : 'text',
+								step: typeof iv === 'number' ? (Math.abs(iv) < 1 ? 0.01 : Math.abs(iv) < 100 ? 1 : 10) : undefined,
+							});
+						});
+					});
+				}
+			});
 			var s = {
 				key: stratKey,
 				configKey: configKey,
@@ -392,12 +414,11 @@ var effectiveConfig = {};
 var controlState = {};
 var STRATEGIES = [];
 
-var tokenEl = document.getElementById('token');
-var saved = localStorage.getItem('hq_api_token');
-if (saved) tokenEl.value = saved;
-tokenEl.addEventListener('change', function() { localStorage.setItem('hq_api_token', tokenEl.value); fetchData(); });
-
-function token() { return tokenEl.value.trim(); }
+function token() { return (localStorage.getItem('hq_api_token') || '').trim(); }
+function saveToken() {
+	var v = document.getElementById('token-entry').value.trim();
+	if (v) { localStorage.setItem('hq_api_token', v); fetchData(); }
+}
 
 function esc(s) { var d = document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
 
@@ -470,7 +491,7 @@ function render(d) {
 	renderOpenOrders(d.accountData);
 	renderBotLogs(d.recentBotLogs);
 	renderAppSize(d.appSizeInfo);
-	renderDryRunState(d.dryRunEnabled);
+	renderDryRunState(controlState.dryRun);
 }
 
 // ─── Render: Bot Switch ──────────────────────────────────────
@@ -638,7 +659,10 @@ function renderStrategyCards(d) {
 			: '<span class="px-2 py-0.5 bg-[#1a2555] text-[#6b7994] text-[10px] rounded-full font-medium">OFF</span>';
 
 		var paramsHtml = s.params.map(function(p) {
-			var val = cfg[p.key] ?? '';
+			var val;
+			var m = p.key.match(/^(\\w+)\\[(\\d+)\\]\\.(\\w+)$/);
+			if (m) { val = (cfg[m[1]] || [])[parseInt(m[2])]?.[m[3]] ?? ''; }
+			else { val = cfg[p.key] ?? ''; }
 			return '<div class="flex items-center gap-2">' +
 				'<label class="text-[11px] text-[#6b7994] w-36 flex-shrink-0">' + esc(p.label) + '</label>' +
 				'<input type="' + p.type + '"' + (p.step ? ' step="' + p.step + '"' : '') + ' value="' + esc(String(val)) + '" ' +
@@ -771,8 +795,8 @@ function renderAppSize(info) {
 function renderDryRunState(enabled) {
 	document.getElementById('chk-dryrun').checked = !!enabled;
 	var b = document.getElementById('dryrun-badge');
-	if (enabled) { b.textContent = 'DRY'; b.className = 'px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] rounded-full font-bold'; }
-	else { b.textContent = 'LIVE'; b.className = 'px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] rounded-full font-bold'; }
+	if (enabled) { b.textContent = 'ON'; b.className = 'px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] rounded-full font-bold'; }
+	else { b.textContent = 'OFF'; b.className = 'px-2 py-0.5 bg-[#1a2555] text-[#6b7994] text-[10px] rounded-full font-bold'; }
 }
 
 // ─── Actions ─────────────────────────────────────────────────
@@ -811,8 +835,17 @@ async function saveParams(configKey) {
 	var inputs = document.querySelectorAll('input[data-strat="' + configKey + '"]');
 	var params = {};
 	inputs.forEach(function(inp) {
-		var v = inp.value;
-		params[inp.dataset.param] = inp.type === 'number' ? parseFloat(v) : v;
+		var k = inp.dataset.param;
+		var v = inp.type === 'number' ? parseFloat(inp.value) : inp.value;
+		var m = k.match(/^(\\w+)\\[(\\d+)\\]\\.(\\w+)$/);
+		if (m) {
+			var arrKey = m[1], idx = parseInt(m[2]), prop = m[3];
+			if (!params[arrKey]) params[arrKey] = [];
+			if (!params[arrKey][idx]) params[arrKey][idx] = {};
+			params[arrKey][idx][prop] = v;
+		} else {
+			params[k] = v;
+		}
 	});
 	var r = await apiFetch('/execution/update-params', {
 		method: 'POST',
@@ -831,7 +864,7 @@ async function saveParams(configKey) {
 
 async function toggleDryRun(enabled) {
 	if (!token()) { alert('Enter API token first'); return; }
-	await apiFetch('/execution/set-dry-run', { method: 'POST', body: JSON.stringify({ enabled: enabled }) });
+	await apiFetch('/execution/set-dry-run', { method: 'POST', body: JSON.stringify({ bot: BOT_NAME, enabled: enabled }) });
 	fetchData();
 }
 

@@ -24,6 +24,8 @@ export const meta = {
 	chain: 'steem',
 	pairs: ['STEEM/SBD'],
 	description: 'Market-making and multi-strategy trading on the Steem internal DEX',
+	category: 'trading',
+	ready: true,
 };
 
 const SNAPSHOT_INTERVAL_MS = 30_000;     // 30s periodic order book snapshots

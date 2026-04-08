@@ -177,6 +177,10 @@ export function updateBrainStatus(botName, fields) {
 export function updateAppSizeInfo(fields) {
 	Object.assign(runtimeCache.appSizeInfo, fields);
 }
+
+export function getAppSizeInfo() {
+	return { ...runtimeCache.appSizeInfo };
+}
 export function updateRiskStatus(botName, fields) {
 	Object.assign(getBotCache(botName).riskStatus, fields);
 }

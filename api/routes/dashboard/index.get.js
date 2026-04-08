@@ -58,6 +58,9 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 	.nav-item { transition: all 0.15s; }
 	.nav-active { background: rgba(74,142,255,0.15); color: #4a8eff; border-left: 3px solid #4a8eff; }
 	.nav-inactive:hover { background: rgba(255,255,255,0.04); }
+	.nav-category-items { overflow: hidden; transition: max-height 0.2s ease; max-height: 500px; }
+	.nav-category.collapsed .nav-category-items { max-height: 0; }
+	.nav-category.collapsed .nav-chevron { transform: rotate(-90deg); }
 	.kpi-icon {
 		width: 48px; height: 48px; border-radius: 14px;
 		display: flex; align-items: center; justify-content: center;
@@ -88,8 +91,6 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 				<span id="last-update" class="text-[11px] text-[#6b7994]"></span>
 			</div>
 			<div class="flex items-center gap-4">
-				<input id="token" type="password" placeholder="🔑 API Token"
-					class="bg-[#111936] border border-[#1a2555] rounded-lg px-3 py-1.5 text-xs w-40 focus:border-[#4a8eff] focus:outline-none focus:ring-1 focus:ring-[#4a8eff]/30 placeholder-[#3a4260] transition-colors" />
 				<label class="flex items-center gap-2">
 					<label class="toggle" title="Global Dry-Run">
 						<input id="chk-global-dryrun" type="checkbox" onchange="toggleGlobalDryRun(this.checked)" />
@@ -97,7 +98,7 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 						<span class="toggle-knob"></span>
 					</label>
 					<span class="text-xs text-[#6b7994]">Dry-Run</span>
-					<span id="dryrun-badge" class="hidden px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] rounded-full font-bold tracking-wide">DRY</span>
+					<span id="dryrun-badge" class="px-2 py-0.5 bg-[#1a2555] text-[#6b7994] text-[10px] rounded-full font-bold tracking-wide">OFF</span>
 				</label>
 				<button onclick="emergencyStop()"
 					class="bg-red-600/90 hover:bg-red-500 px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-lg shadow-red-600/20 hover:shadow-red-500/30">
@@ -120,7 +121,12 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 		<div id="no-token-msg" class="hidden card rounded-xl p-8 text-center">
 			<div class="text-4xl mb-3">🔑</div>
 			<div class="text-white font-semibold mb-1">Enter API Token</div>
-			<div class="text-[#6b7994] text-sm">Enter your API token in the top-right field to load dashboard data.</div>
+			<div class="text-[#6b7994] text-sm mb-3">Provide your API token to load dashboard data.</div>
+			<div class="flex items-center justify-center gap-2">
+				<input id="token-entry" type="password" placeholder="Paste token here"
+					class="bg-[#111936] border border-[#1a2555] rounded-lg px-3 py-1.5 text-xs w-56 focus:border-[#4a8eff] focus:outline-none focus:ring-1 focus:ring-[#4a8eff]/30 placeholder-[#3a4260] transition-colors" />
+				<button onclick="saveToken()" class="bg-[#4a8eff] hover:bg-[#5a9aff] text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-colors">Save</button>
+			</div>
 		</div>
 
 		<!-- ─── App Overview Cards ──────────────────── -->
@@ -169,11 +175,27 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 			</div>
 
 			<!-- ─── Trading Bots ───────────────────────── -->
-			<div class="mt-6">
+			<div class="mt-6" id="section-trading">
 				<div class="flex items-center justify-between mb-4">
 					<h2 class="text-sm font-bold text-[#6b7994] uppercase tracking-widest">Trading Bots</h2>
 				</div>
-				<div id="bot-cards" class="grid grid-cols-1 xl:grid-cols-2 gap-5"></div>
+				<div id="trading-cards" class="grid grid-cols-1 xl:grid-cols-2 gap-5"></div>
+			</div>
+
+			<!-- ─── Monitoring ─────────────────────────── -->
+			<div class="mt-6" id="section-monitoring">
+				<div class="flex items-center justify-between mb-4">
+					<h2 class="text-sm font-bold text-[#6b7994] uppercase tracking-widest">Monitoring</h2>
+				</div>
+				<div id="monitoring-cards" class="grid grid-cols-1 xl:grid-cols-2 gap-5"></div>
+			</div>
+
+			<!-- ─── Analysis ───────────────────────────── -->
+			<div class="mt-6" id="section-analysis">
+				<div class="flex items-center justify-between mb-4">
+					<h2 class="text-sm font-bold text-[#6b7994] uppercase tracking-widest">Analysis</h2>
+				</div>
+				<div id="analysis-cards" class="grid grid-cols-1 xl:grid-cols-2 gap-5"></div>
 			</div>
 
 			<!-- ─── System Overview ────────────────────── -->
@@ -215,7 +237,11 @@ const PAGE_HTML = /*html*/ `<!DOCTYPE html>
 const API = '/api';
 let data = null;
 
-function token() { return document.getElementById('token').value.trim(); }
+function token() { return (localStorage.getItem('hq_api_token') || '').trim(); }
+function saveToken() {
+	var v = document.getElementById('token-entry').value.trim();
+	if (v) { localStorage.setItem('hq_api_token', v); fetchData(); }
+}
 
 async function apiFetch(path, opts = {}) {
 	const headers = { 'Content-Type': 'application/json' };
@@ -260,8 +286,9 @@ function render(d) {
 
 	// Global dry-run
 	document.getElementById('chk-global-dryrun').checked = d.globalDryRun;
-	const badge = document.getElementById('dryrun-badge');
-	d.globalDryRun ? badge.classList.remove('hidden') : badge.classList.add('hidden');
+	var badge = document.getElementById('dryrun-badge');
+	if (d.globalDryRun) { badge.textContent = 'ON'; badge.className = 'px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] rounded-full font-bold tracking-wide'; }
+	else { badge.textContent = 'OFF'; badge.className = 'px-2 py-0.5 bg-[#1a2555] text-[#6b7994] text-[10px] rounded-full font-bold tracking-wide'; }
 
 	// ─── App Overview KPI Cards ───────
 	const ai = d.overview.appSizeInfo || {};
@@ -283,22 +310,29 @@ function render(d) {
 	document.getElementById('stat-snapshots-sub').textContent = (ss.snapshotsToday ?? 0) + ' today';
 
 	// System info
+	var trading = d.bots.filter(b => b.category === 'trading');
+	var monitoring = d.bots.filter(b => b.category === 'monitoring');
+	var analysis = d.bots.filter(b => b.category === 'analysis');
+
 	document.getElementById('system-info').innerHTML =
 		'<div class="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3">' +
-		kpiSmall('Active Bots', d.bots.filter(b => b.enabled).length + ' / ' + d.bots.length) +
+		kpiSmall('Trading Bots', trading.filter(b => b.enabled).length + ' / ' + trading.length) +
+		kpiSmall('Monitoring', monitoring.filter(b => b.dataCollection).length + ' / ' + monitoring.length) +
+		kpiSmall('Analysis', analysis.filter(b => b.dataCollection).length + ' / ' + analysis.length) +
 		kpiSmall('Trades Today', ss.tradesToday ?? '0') +
-		kpiSmall('DB Size', dbMB ? dbMB.toFixed(2) + ' MB' : '—') +
-		kpiSmall('Uptime', ai.updatedAt ? timeSince(ai.updatedAt) : '—') +
 		'</div>';
 
-	// Bot cards
-	document.getElementById('bot-cards').innerHTML = d.bots.map(botCard).join('');
+	// Bot cards — split by category
+	document.getElementById('trading-cards').innerHTML = trading.map(botCard).join('') || emptySection('No trading bots registered');
+	document.getElementById('monitoring-cards').innerHTML = monitoring.map(botCard).join('') || emptySection('No monitoring tools registered');
+	document.getElementById('analysis-cards').innerHTML = analysis.map(botCard).join('') || emptySection('No analysis tools registered');
 
 	// Recent logs
 	renderLogs(d.recentLogs || []);
 }
 
 function botCard(b) {
+	if (!b.ready) return plannedCard(b);
 	var on = b.enabled;
 	var dataOn = b.dataCollection;
 	var statusColor = on ? 'bg-emerald-500' : 'bg-gray-600';
@@ -375,7 +409,7 @@ function botCard(b) {
 						'<span class="toggle-knob"></span>' +
 					'</label>' +
 					'<span class="text-[10px] text-[#6b7994]">Dry</span>' +
-					(b.dryRun ? '<span class="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-[9px] rounded font-bold">DRY</span>' : '<span class="px-1.5 py-0.5 bg-[#1a2555] text-[#6b7994] text-[9px] rounded font-bold">LIVE</span>') +
+					(b.dryRun ? '<span class="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-[9px] rounded font-bold">ON</span>' : '<span class="px-1.5 py-0.5 bg-[#1a2555] text-[#6b7994] text-[9px] rounded font-bold">OFF</span>') +
 				'</label>' +
 				/* Bot ON/OFF */
 				'<label class="flex items-center gap-1.5" title="Turn bot ON/OFF">' +
@@ -405,6 +439,27 @@ function botCard(b) {
 			'<a href="/api/dashboard/bots/' + b.name + '" class="inline-flex items-center gap-2 px-5 py-2.5 bg-[#4a8eff]/10 hover:bg-[#4a8eff]/20 text-[#4a8eff] text-xs font-semibold rounded-lg transition-colors">Open Detailed View <span>→</span></a>' +
 		'</div>' +
 	'</div>';
+}
+
+function plannedCard(b) {
+	return '<div class="card rounded-xl p-6 relative overflow-hidden" style="opacity:0.45;pointer-events:none;user-select:none">' +
+		'<div class="flex items-center gap-4 mb-4">' +
+			'<div class="w-12 h-12 rounded-xl bg-[#1a2555] flex items-center justify-center text-2xl grayscale">🤖</div>' +
+			'<div>' +
+				'<div class="font-semibold text-[#6b7994] text-base">' + esc(b.label) + '</div>' +
+				'<div class="text-[11px] text-[#3a4260]">' + esc(b.chain) + ' · ' + esc(b.pair) + '</div>' +
+			'</div>' +
+		'</div>' +
+		'<div class="flex items-center gap-2">' +
+			'<span class="status-dot bg-gray-700"></span>' +
+			'<span class="text-xs text-[#3a4260] font-semibold">PLANNED</span>' +
+		'</div>' +
+		'<div class="mt-4 text-[11px] text-[#3a4260]">' + esc(b.description || 'Coming soon') + '</div>' +
+	'</div>';
+}
+
+function emptySection(msg) {
+	return '<div class="card rounded-xl p-6 text-center text-[#3a4260] text-sm">' + msg + '</div>';
 }
 
 function renderLogs(logs) {
@@ -489,14 +544,6 @@ async function cleanLogs() {
 }
 
 // ─── Init & Auto-refresh ─────────────────
-
-// Load saved token FIRST, then fetch
-var savedToken = localStorage.getItem('hq_api_token');
-if (savedToken) document.getElementById('token').value = savedToken;
-document.getElementById('token').addEventListener('change', function(e) {
-	localStorage.setItem('hq_api_token', e.target.value);
-	fetchData();
-});
 
 fetchData();
 setInterval(fetchData, 10000);

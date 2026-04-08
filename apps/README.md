@@ -18,6 +18,21 @@ Each app folder contains:
 - `config.json` — app-specific configuration
 - `README.md` — purpose and how to enable
 
+## Dashboard Visibility (meta.ready)
+
+The `meta.ready` flag controls how the app appears in the dashboard sidebar:
+
+- `ready: true` — Clickable link, normal styling. Use this **only** when the app is fully implemented.
+- `ready: false` — Greyed out, non-clickable, grouped at the bottom with other planned features. Use this for stubs/scaffolds.
+
+**When developing a new app:**
+1. Copy `_template/` — the template defaults to `ready: false`
+2. Implement the bot lifecycle
+3. Once fully working, flip `ready: true` in the app's `meta` object
+
+**When deprecating/disabling an app:**
+1. Set `ready: false` in the app's `meta` object — it will immediately grey out in the sidebar
+
 ## Interface Contract
 
 All apps are registered via `botRegistry` and implement the **bot lifecycle contract**:

@@ -42,7 +42,10 @@ async function run() {
 		startCrons();
 		console.info('CRON', '🟢 PRODUCTION | Crons Scheduler enabled');
 	} else {
-		console.info('CRON', '🔴 DEV MODE | Crons Scheduler disabled');
+		// In dev mode, skip recurring schedules but still run one-shot startup tasks
+		const { default: updateAppSize } = await import('./scheduler/crons/updateAppSize.js');
+		await updateAppSize();
+		console.info('CRON', '🔴 DEV MODE | Crons Scheduler disabled (startup tasks ran once)');
 	}
 
 	// ##########################################    APPS   ##########################################
